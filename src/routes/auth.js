@@ -143,7 +143,7 @@ router.post('/refresh-token', async (req, res) => {
     const decoded = authService.verifyJWT(token);
 
     // Generate new token
-    const newToken = authService.generateJWT(decoded.phoneNumber);
+    const newToken = authService.generateJWT(decoded.phoneNumber, decoded.role);
 
     res.status(200).json({
       success: true,
@@ -257,26 +257,26 @@ router.get('/manufacturer-profile', async (req, res) => {
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get user from database
-    const user = await authService.getUserByPhone(decoded.phoneNumber);
-    if (!user) {
+    // Get profile from database
+    const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'Profile not found'
       });
     }
 
-    // Get manufacturer profile
-    const profile = await authService.getManufacturerProfile(user.id);
+    // For manufacturer profile, get the full profile data
+    const fullProfile = await authService.getManufacturerProfile(profile.id);
 
     res.status(200).json({
       success: true,
       message: 'Profile retrieved successfully',
       data: {
-        profile: profile || {
+        profile: fullProfile || {
           company_name: '',
           business_type: '',
-          phone_number: user.phone_number,
+          phone_number: profile.phone_number,
           gst_number: '',
           pan_number: '',
           coi_number: '',
@@ -340,18 +340,18 @@ router.put('/manufacturer-profile', [
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get user from database
-    const user = await authService.getUserByPhone(decoded.phoneNumber);
-    if (!user) {
+    // Get profile from database
+    const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'Profile not found'
       });
     }
 
     // Update manufacturer profile
     const profileData = req.body;
-    const updatedProfile = await authService.updateManufacturerProfile(user.id, profileData);
+    const updatedProfile = await authService.updateManufacturerProfile(profile.id, profileData);
 
     res.status(200).json({
       success: true,
@@ -390,26 +390,26 @@ router.get('/buyer-profile', async (req, res) => {
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get user from database
-    const user = await authService.getUserByPhone(decoded.phoneNumber);
-    if (!user) {
+    // Get profile from database
+    const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'Profile not found'
       });
     }
 
-    // Get buyer profile
-    const profile = await authService.getBuyerProfile(user.id);
+    // For buyer profile, get the full profile data
+    const fullProfile = await authService.getBuyerProfile(profile.id);
 
     res.status(200).json({
       success: true,
       message: 'Profile retrieved successfully',
       data: {
-        profile: profile || {
+        profile: fullProfile || {
           full_name: '',
           email: '',
-          phone_number: user.phone_number,
+          phone_number: profile.phone_number,
           company_name: '',
           business_type: '',
           gst_number: '',
@@ -469,18 +469,18 @@ router.put('/buyer-profile', [
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get user from database
-    const user = await authService.getUserByPhone(decoded.phoneNumber);
-    if (!user) {
+    // Get profile from database
+    const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'Profile not found'
       });
     }
 
     // Update buyer profile
     const profileData = req.body;
-    const updatedProfile = await authService.updateBuyerProfile(user.id, profileData);
+    const updatedProfile = await authService.updateBuyerProfile(profile.id, profileData);
 
     res.status(200).json({
       success: true,

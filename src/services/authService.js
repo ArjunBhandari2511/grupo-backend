@@ -90,7 +90,7 @@ class AuthService {
   }
 
   /**
-   * Verify OTP and create/update user
+   * Verify OTP and create/update profile
    * @param {string} phoneNumber - Phone number
    * @param {string} otp - OTP to verify
    * @param {string} role - User role ('buyer' or 'manufacturer')
@@ -134,35 +134,58 @@ class AuthService {
         is_verified: true
       });
 
-      // Check if user exists, create if not
-      let user = await databaseService.findUserByPhone(phoneNumber);
-      
-      if (!user) {
-        // Create new user
-        const userData = {
-          phone_number: phoneNumber,
-          role: role,
-          is_verified: true,
-          last_login: new Date().toISOString()
-        };
-        user = await databaseService.createUser(userData);
-        console.log(`New ${role} user created: ${phoneNumber}`);
-      } else {
-        // Update existing user
-        await databaseService.updateUser(phoneNumber, {
-          is_verified: true,
-          last_login: new Date().toISOString()
-        });
-        console.log(`Existing user verified: ${phoneNumber}`);
+      // Check if profile exists, create if not
+      let profile = null;
+      if (role === 'buyer') {
+        profile = await databaseService.findBuyerProfileByPhone(phoneNumber);
+        
+        if (!profile) {
+          // Create new buyer profile
+          const profileData = {
+            phone_number: phoneNumber,
+            is_verified: true,
+            last_login: new Date().toISOString()
+          };
+          profile = await databaseService.createBuyerProfile(profileData);
+          console.log(`New buyer profile created: ${phoneNumber}`);
+        } else {
+          // Update existing buyer profile
+          await databaseService.updateBuyerProfileByPhone(phoneNumber, {
+            is_verified: true,
+            last_login: new Date().toISOString()
+          });
+          console.log(`Existing buyer profile verified: ${phoneNumber}`);
+        }
+      } else if (role === 'manufacturer') {
+        profile = await databaseService.findManufacturerProfileByPhone(phoneNumber);
+        
+        if (!profile) {
+          // Create new manufacturer profile
+          const profileData = {
+            phone_number: phoneNumber,
+            is_verified: true,
+            last_login: new Date().toISOString()
+          };
+          profile = await databaseService.createManufacturerProfile(profileData);
+          console.log(`New manufacturer profile created: ${phoneNumber}`);
+        } else {
+          // Update existing manufacturer profile
+          await databaseService.updateManufacturerProfileByPhone(phoneNumber, {
+            is_verified: true,
+            last_login: new Date().toISOString()
+          });
+          console.log(`Existing manufacturer profile verified: ${phoneNumber}`);
+        }
       }
 
       // Generate JWT token
-      const token = this.generateJWT(phoneNumber);
+      const token = this.generateJWT(phoneNumber, role);
 
       // Store user session in database
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       const sessionData = {
-        user_id: user.id,
+        profile_id: profile.id,
+        profile_type: role,
         token_hash: tokenHash,
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       };
@@ -173,10 +196,10 @@ class AuthService {
         message: 'OTP verified successfully',
         token,
         user: {
-          id: user.id,
-          phoneNumber: user.phone_number,
-          role: user.role,
-          verified: user.is_verified
+          id: profile.id,
+          phoneNumber: profile.phone_number,
+          role: role,
+          verified: profile.is_verified
         }
       };
 
@@ -189,11 +212,13 @@ class AuthService {
   /**
    * Generate JWT token
    * @param {string} phoneNumber - Phone number
+   * @param {string} role - User role ('buyer' or 'manufacturer')
    * @returns {string} JWT token
    */
-  generateJWT(phoneNumber) {
+  generateJWT(phoneNumber, role) {
     const payload = {
       phoneNumber,
+      role,
       iat: Math.floor(Date.now() / 1000),
       type: 'auth'
     };
@@ -266,7 +291,7 @@ class AuthService {
       }
       
       return {
-        user: session.users,
+        user: session.profile,
         session: session
       };
     } catch (error) {
@@ -276,27 +301,33 @@ class AuthService {
   }
 
   /**
-   * Get user by phone number
+   * Get profile by phone number and role
    * @param {string} phoneNumber - Phone number
-   * @returns {Promise<Object>} User data
+   * @param {string} role - User role ('buyer' or 'manufacturer')
+   * @returns {Promise<Object>} Profile data
    */
-  async getUserByPhone(phoneNumber) {
+  async getProfileByPhone(phoneNumber, role) {
     try {
-      return await databaseService.findUserByPhone(phoneNumber);
+      if (role === 'buyer') {
+        return await databaseService.findBuyerProfileByPhone(phoneNumber);
+      } else if (role === 'manufacturer') {
+        return await databaseService.findManufacturerProfileByPhone(phoneNumber);
+      }
+      throw new Error('Invalid role specified');
     } catch (error) {
-      console.error('Error getting user by phone:', error);
+      console.error('Error getting profile by phone:', error);
       throw error;
     }
   }
 
   /**
-   * Get manufacturer profile by user ID
-   * @param {string} userId - User ID
+   * Get manufacturer profile by profile ID
+   * @param {string} profileId - Profile ID
    * @returns {Promise<Object>} Manufacturer profile data
    */
-  async getManufacturerProfile(userId) {
+  async getManufacturerProfile(profileId) {
     try {
-      return await databaseService.findManufacturerProfile(userId);
+      return await databaseService.findManufacturerProfile(profileId);
     } catch (error) {
       console.error('Error getting manufacturer profile:', error);
       throw error;
@@ -305,13 +336,13 @@ class AuthService {
 
   /**
    * Update manufacturer profile
-   * @param {string} userId - User ID
+   * @param {string} profileId - Profile ID
    * @param {Object} profileData - Profile data to update
    * @returns {Promise<Object>} Updated profile data
    */
-  async updateManufacturerProfile(userId, profileData) {
+  async updateManufacturerProfile(profileId, profileData) {
     try {
-      return await databaseService.updateManufacturerProfile(userId, profileData);
+      return await databaseService.updateManufacturerProfile(profileId, profileData);
     } catch (error) {
       console.error('Error updating manufacturer profile:', error);
       throw error;
@@ -319,13 +350,13 @@ class AuthService {
   }
 
   /**
-   * Get buyer profile by user ID
-   * @param {string} userId - User ID
+   * Get buyer profile by profile ID
+   * @param {string} profileId - Profile ID
    * @returns {Promise<Object>} Buyer profile data
    */
-  async getBuyerProfile(userId) {
+  async getBuyerProfile(profileId) {
     try {
-      return await databaseService.findBuyerProfile(userId);
+      return await databaseService.findBuyerProfile(profileId);
     } catch (error) {
       console.error('Error getting buyer profile:', error);
       throw error;
@@ -334,13 +365,13 @@ class AuthService {
 
   /**
    * Update buyer profile
-   * @param {string} userId - User ID
+   * @param {string} profileId - Profile ID
    * @param {Object} profileData - Profile data to update
    * @returns {Promise<Object>} Updated profile data
    */
-  async updateBuyerProfile(userId, profileData) {
+  async updateBuyerProfile(profileId, profileData) {
     try {
-      return await databaseService.updateBuyerProfile(userId, profileData);
+      return await databaseService.updateBuyerProfile(profileId, profileData);
     } catch (error) {
       console.error('Error updating buyer profile:', error);
       throw error;

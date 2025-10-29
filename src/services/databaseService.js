@@ -2,75 +2,149 @@ const supabase = require('../config/supabase');
 
 class DatabaseService {
   /**
-   * Create a new user
-   * @param {Object} userData - User data
-   * @returns {Promise<Object>} Created user
+   * Create a new buyer profile
+   * @param {Object} profileData - Buyer profile data
+   * @returns {Promise<Object>} Created buyer profile
    */
-  async createUser(userData) {
+  async createBuyerProfile(profileData) {
     try {
       const { data, error } = await supabase
-        .from('users')
-        .insert([userData])
+        .from('buyer_profiles')
+        .insert([profileData])
         .select()
         .single();
 
       if (error) {
-        throw new Error(`Failed to create user: ${error.message}`);
+        throw new Error(`Failed to create buyer profile: ${error.message}`);
       }
 
       return data;
     } catch (error) {
-      console.error('DatabaseService.createUser error:', error);
+      console.error('DatabaseService.createBuyerProfile error:', error);
       throw error;
     }
   }
 
   /**
-   * Find user by phone number
-   * @param {string} phoneNumber - Phone number
-   * @returns {Promise<Object|null>} User data or null
+   * Create a new manufacturer profile
+   * @param {Object} profileData - Manufacturer profile data
+   * @returns {Promise<Object>} Created manufacturer profile
    */
-  async findUserByPhone(phoneNumber) {
+  async createManufacturerProfile(profileData) {
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('manufacturer_profiles')
+        .insert([profileData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create manufacturer profile: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.createManufacturerProfile error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find buyer profile by phone number
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<Object|null>} Buyer profile data or null
+   */
+  async findBuyerProfileByPhone(phoneNumber) {
+    try {
+      const { data, error } = await supabase
+        .from('buyer_profiles')
         .select('*')
         .eq('phone_number', phoneNumber)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        throw new Error(`Failed to find user: ${error.message}`);
+        throw new Error(`Failed to find buyer profile: ${error.message}`);
       }
 
       return data || null;
     } catch (error) {
-      console.error('DatabaseService.findUserByPhone error:', error);
+      console.error('DatabaseService.findBuyerProfileByPhone error:', error);
       throw error;
     }
   }
 
   /**
-   * Update user data
+   * Find manufacturer profile by phone number
    * @param {string} phoneNumber - Phone number
-   * @param {Object} updateData - Data to update
-   * @returns {Promise<Object>} Updated user
+   * @returns {Promise<Object|null>} Manufacturer profile data or null
    */
-  async updateUser(phoneNumber, updateData) {
+  async findManufacturerProfileByPhone(phoneNumber) {
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('manufacturer_profiles')
+        .select('*')
+        .eq('phone_number', phoneNumber)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw new Error(`Failed to find manufacturer profile: ${error.message}`);
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('DatabaseService.findManufacturerProfileByPhone error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update buyer profile data
+   * @param {string} phoneNumber - Phone number
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated buyer profile
+   */
+  async updateBuyerProfileByPhone(phoneNumber, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('buyer_profiles')
         .update(updateData)
         .eq('phone_number', phoneNumber)
         .select()
         .single();
 
       if (error) {
-        throw new Error(`Failed to update user: ${error.message}`);
+        throw new Error(`Failed to update buyer profile: ${error.message}`);
       }
 
       return data;
     } catch (error) {
-      console.error('DatabaseService.updateUser error:', error);
+      console.error('DatabaseService.updateBuyerProfileByPhone error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update manufacturer profile data
+   * @param {string} phoneNumber - Phone number
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated manufacturer profile
+   */
+  async updateManufacturerProfileByPhone(phoneNumber, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('manufacturer_profiles')
+        .update(updateData)
+        .eq('phone_number', phoneNumber)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update manufacturer profile: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.updateManufacturerProfileByPhone error:', error);
       throw error;
     }
   }
@@ -155,7 +229,7 @@ class DatabaseService {
 
   /**
    * Store user session
-   * @param {Object} sessionData - Session data
+   * @param {Object} sessionData - Session data with profile_id and profile_type
    * @returns {Promise<Object>} Stored session
    */
   async storeUserSession(sessionData) {
@@ -180,16 +254,13 @@ class DatabaseService {
   /**
    * Find active user session
    * @param {string} tokenHash - Token hash
-   * @returns {Promise<Object|null>} Session or null
+   * @returns {Promise<Object|null>} Session with profile data or null
    */
   async findUserSession(tokenHash) {
     try {
       const { data, error } = await supabase
         .from('user_sessions')
-        .select(`
-          *,
-          users!inner(*)
-        `)
+        .select('*')
         .eq('token_hash', tokenHash)
         .eq('is_active', true)
         .gt('expires_at', new Date().toISOString())
@@ -199,7 +270,38 @@ class DatabaseService {
         throw new Error(`Failed to find user session: ${error.message}`);
       }
 
-      return data || null;
+      if (!data) {
+        return null;
+      }
+
+      // Get the profile data based on profile_type
+      let profileData = null;
+      if (data.profile_type === 'buyer') {
+        const { data: buyerProfile, error: buyerError } = await supabase
+          .from('buyer_profiles')
+          .select('*')
+          .eq('id', data.profile_id)
+          .single();
+        
+        if (!buyerError) {
+          profileData = buyerProfile;
+        }
+      } else if (data.profile_type === 'manufacturer') {
+        const { data: manufacturerProfile, error: manufacturerError } = await supabase
+          .from('manufacturer_profiles')
+          .select('*')
+          .eq('id', data.profile_id)
+          .single();
+        
+        if (!manufacturerError) {
+          profileData = manufacturerProfile;
+        }
+      }
+
+      return {
+        ...data,
+        profile: profileData
+      };
     } catch (error) {
       console.error('DatabaseService.findUserSession error:', error);
       throw error;
@@ -271,89 +373,18 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Create buyer profile
-   * @param {Object} profileData - Buyer profile data
-   * @returns {Promise<Object>} Created profile
-   */
-  async createBuyerProfile(profileData) {
-    try {
-      const { data, error } = await supabase
-        .from('buyer_profiles')
-        .insert([profileData])
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to create buyer profile: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('DatabaseService.createBuyerProfile error:', error);
-      throw error;
-    }
-  }
 
   /**
-   * Create manufacturer profile
-   * @param {Object} profileData - Manufacturer profile data
-   * @returns {Promise<Object>} Created profile
-   */
-  async createManufacturerProfile(profileData) {
-    try {
-      const { data, error } = await supabase
-        .from('manufacturer_profiles')
-        .insert([profileData])
-        .select()
-        .single();
-
-      if (error) {
-        throw new Error(`Failed to create manufacturer profile: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('DatabaseService.createManufacturerProfile error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find user by phone number
-   * @param {string} phoneNumber - Phone number
-   * @returns {Promise<Object>} User data
-   */
-  async findUserByPhone(phoneNumber) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone_number', phoneNumber)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw new Error(`Failed to find user: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error('DatabaseService.findUserByPhone error:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Find manufacturer profile by user ID
-   * @param {string} userId - User ID
+   * Find manufacturer profile by profile ID
+   * @param {string} profileId - Profile ID
    * @returns {Promise<Object>} Manufacturer profile data
    */
-  async findManufacturerProfile(userId) {
+  async findManufacturerProfile(profileId) {
     try {
       const { data, error } = await supabase
         .from('manufacturer_profiles')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', profileId)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
@@ -369,14 +400,14 @@ class DatabaseService {
 
   /**
    * Update manufacturer profile
-   * @param {string} userId - User ID
+   * @param {string} profileId - Profile ID
    * @param {Object} profileData - Profile data to update
    * @returns {Promise<Object>} Updated profile data
    */
-  async updateManufacturerProfile(userId, profileData) {
+  async updateManufacturerProfile(profileId, profileData) {
     try {
       // First check if profile exists
-      const existingProfile = await this.findManufacturerProfile(userId);
+      const existingProfile = await this.findManufacturerProfile(profileId);
       
       if (existingProfile) {
         // Update existing profile
@@ -386,7 +417,7 @@ class DatabaseService {
             ...profileData,
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', userId)
+          .eq('id', profileId)
           .select()
           .single();
 
@@ -396,23 +427,7 @@ class DatabaseService {
 
         return data;
       } else {
-        // Create new profile
-        const { data, error } = await supabase
-          .from('manufacturer_profiles')
-          .insert([{
-            user_id: userId,
-            ...profileData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
-
-        if (error) {
-          throw new Error(`Failed to create manufacturer profile: ${error.message}`);
-        }
-
-        return data;
+        throw new Error('Manufacturer profile not found');
       }
     } catch (error) {
       console.error('DatabaseService.updateManufacturerProfile error:', error);
@@ -421,16 +436,16 @@ class DatabaseService {
   }
 
   /**
-   * Find buyer profile by user ID
-   * @param {string} userId - User ID
+   * Find buyer profile by profile ID
+   * @param {string} profileId - Profile ID
    * @returns {Promise<Object>} Buyer profile data
    */
-  async findBuyerProfile(userId) {
+  async findBuyerProfile(profileId) {
     try {
       const { data, error } = await supabase
         .from('buyer_profiles')
         .select('*')
-        .eq('user_id', userId)
+        .eq('id', profileId)
         .single();
 
       if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
@@ -446,14 +461,14 @@ class DatabaseService {
 
   /**
    * Update buyer profile
-   * @param {string} userId - User ID
+   * @param {string} profileId - Profile ID
    * @param {Object} profileData - Profile data to update
    * @returns {Promise<Object>} Updated profile data
    */
-  async updateBuyerProfile(userId, profileData) {
+  async updateBuyerProfile(profileId, profileData) {
     try {
       // First check if profile exists
-      const existingProfile = await this.findBuyerProfile(userId);
+      const existingProfile = await this.findBuyerProfile(profileId);
       
       if (existingProfile) {
         // Update existing profile
@@ -463,7 +478,7 @@ class DatabaseService {
             ...profileData,
             updated_at: new Date().toISOString()
           })
-          .eq('user_id', userId)
+          .eq('id', profileId)
           .select()
           .single();
 
@@ -473,23 +488,7 @@ class DatabaseService {
 
         return data;
       } else {
-        // Create new profile
-        const { data, error } = await supabase
-          .from('buyer_profiles')
-          .insert([{
-            user_id: userId,
-            ...profileData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          }])
-          .select()
-          .single();
-
-        if (error) {
-          throw new Error(`Failed to create buyer profile: ${error.message}`);
-        }
-
-        return data;
+        throw new Error('Buyer profile not found');
       }
     } catch (error) {
       console.error('DatabaseService.updateBuyerProfile error:', error);

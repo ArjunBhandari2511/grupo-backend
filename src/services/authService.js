@@ -379,6 +379,63 @@ class AuthService {
   }
 
   /**
+   * Create manufacturer profile
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<Object>} Created profile data
+   */
+  async createManufacturerProfile(phoneNumber) {
+    try {
+      const profileData = {
+        phone_number: phoneNumber,
+        is_verified: true,
+        last_login: new Date().toISOString()
+      };
+      return await databaseService.createManufacturerProfile(profileData);
+    } catch (error) {
+      console.error('Error creating manufacturer profile:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit manufacturer onboarding data
+   * @param {string} profileId - Profile ID
+   * @param {Object} onboardingData - Onboarding data
+   * @returns {Promise<Object>} Updated profile data
+   */
+  async submitManufacturerOnboarding(profileId, onboardingData) {
+    try {
+      return await databaseService.updateManufacturerProfile(profileId, onboardingData);
+    } catch (error) {
+      console.error('Error submitting manufacturer onboarding:', error);
+      throw error;
+    }
+  }
+
+  async createBuyerProfile(phoneNumber) {
+    try {
+      const profileData = {
+        phone_number: phoneNumber,
+        is_verified: true,
+        last_login: new Date().toISOString()
+      };
+      return await databaseService.createBuyerProfile(profileData);
+    } catch (error) {
+      console.error('Error creating buyer profile:', error);
+      throw error;
+    }
+  }
+
+  async submitBuyerOnboarding(profileId, onboardingData) {
+    try {
+      return await databaseService.updateBuyerProfile(profileId, onboardingData);
+    } catch (error) {
+      console.error('Error submitting buyer onboarding:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up expired OTPs and sessions
    */
   async cleanupExpiredData() {

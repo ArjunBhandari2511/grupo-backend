@@ -238,6 +238,91 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+
+/**
+ * @route   POST /api/auth/manufacturer-onboarding
+ * @desc    Submit manufacturer onboarding data
+ * @access  Private
+ */
+router.post('/manufacturer-onboarding', [
+  body('unit_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Unit name is required and must be between 1 and 255 characters'),
+  body('business_type').notEmpty().isLength({ min: 1, max: 100 }).withMessage('Business type is required and must be between 1 and 100 characters'),
+  body('gst_number').notEmpty().isLength({ min: 1, max: 20 }).withMessage('GST number is required and must be between 1 and 20 characters'),
+  body('pan_number').optional().isLength({ min: 1, max: 20 }).withMessage('PAN number must be between 1 and 20 characters'),
+  body('coi_number').optional().isLength({ min: 1, max: 50 }).withMessage('COI number must be between 1 and 50 characters'),
+  body('product_types').optional().isArray().withMessage('Product types must be an array'),
+  body('capacity').optional().isInt({ min: 0 }).withMessage('Capacity must be a positive integer'),
+  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters'),
+  body('msme_file').optional(),
+  body('other_certificates').optional()
+], async (req, res) => {
+  try {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = authService.verifyJWT(token);
+
+    // Get or create profile from database
+    let profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
+      // Create new profile if it doesn't exist
+      profile = await authService.createManufacturerProfile(decoded.phoneNumber);
+    }
+
+    // Submit onboarding data
+    const onboardingData = {
+      unit_name: req.body.unit_name,
+      business_type: req.body.business_type,
+      gst_number: req.body.gst_number,
+      pan_number: req.body.pan_number,
+      coi_number: req.body.coi_number,
+      product_types: req.body.product_types || [],
+      daily_capacity: req.body.capacity || 0,
+      location: req.body.location,
+      // Handle file objects - for now, store as null or placeholder
+      msme_file_url: req.body.msme_file ? (typeof req.body.msme_file === 'string' ? req.body.msme_file : null) : null,
+      other_certificates_url: req.body.other_certificates ? (typeof req.body.other_certificates === 'string' ? req.body.other_certificates : null) : null,
+      onboarding_completed: true,
+      onboarding_completed_at: new Date().toISOString()
+    };
+
+    const updatedProfile = await authService.submitManufacturerOnboarding(profile.id, onboardingData);
+
+    res.status(200).json({
+      success: true,
+      message: 'Onboarding completed successfully',
+      data: {
+        profile: updatedProfile
+      }
+    });
+
+  } catch (error) {
+    console.error('Onboarding submission error:', error);
+    
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to submit onboarding data'
+    });
+  }
+});
+
 /**
  * @route   GET /api/auth/manufacturer-profile
  * @desc    Get manufacturer profile
@@ -266,7 +351,7 @@ router.get('/manufacturer-profile', async (req, res) => {
       });
     }
 
-    // For manufacturer profile, get the full profile data
+    // Get full manufacturer profile data
     const fullProfile = await authService.getManufacturerProfile(profile.id);
 
     res.status(200).json({
@@ -274,23 +359,22 @@ router.get('/manufacturer-profile', async (req, res) => {
       message: 'Profile retrieved successfully',
       data: {
         profile: fullProfile || {
-          company_name: '',
-          business_type: '',
           phone_number: profile.phone_number,
+          unit_name: '',
+          business_type: '',
           gst_number: '',
           pan_number: '',
           coi_number: '',
-          msme_number: '',
+          product_types: [],
           daily_capacity: 0,
-          factory_address: '',
-          specialization: '',
-          certifications: []
+          location: '',
+          onboarding_completed: false
         }
       }
     });
 
   } catch (error) {
-    console.error('Get profile error:', error);
+    console.error('Get manufacturer profile error:', error);
     
     res.status(400).json({
       success: false,
@@ -305,17 +389,14 @@ router.get('/manufacturer-profile', async (req, res) => {
  * @access  Private
  */
 router.put('/manufacturer-profile', [
-  body('company_name').optional().isLength({ min: 1, max: 255 }).withMessage('Company name must be between 1 and 255 characters'),
+  body('unit_name').optional().isLength({ min: 1, max: 255 }).withMessage('Unit name must be between 1 and 255 characters'),
   body('business_type').optional().isLength({ min: 1, max: 100 }).withMessage('Business type must be between 1 and 100 characters'),
-  body('phone_number').optional().isMobilePhone('any').withMessage('Please provide a valid phone number'),
   body('gst_number').optional().isLength({ min: 1, max: 20 }).withMessage('GST number must be between 1 and 20 characters'),
   body('pan_number').optional().isLength({ min: 1, max: 20 }).withMessage('PAN number must be between 1 and 20 characters'),
   body('coi_number').optional().isLength({ min: 1, max: 50 }).withMessage('COI number must be between 1 and 50 characters'),
-  body('msme_number').optional().isLength({ min: 1, max: 50 }).withMessage('MSME number must be between 1 and 50 characters'),
+  body('product_types').optional().isArray().withMessage('Product types must be an array'),
   body('daily_capacity').optional().isInt({ min: 0 }).withMessage('Daily capacity must be a positive integer'),
-  body('factory_address').optional().isLength({ min: 1, max: 1000 }).withMessage('Factory address must be between 1 and 1000 characters'),
-  body('specialization').optional().isLength({ min: 1, max: 1000 }).withMessage('Specialization must be between 1 and 1000 characters'),
-  body('certifications').optional().isArray().withMessage('Certifications must be an array')
+  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters')
 ], async (req, res) => {
   try {
     // Check validation errors
@@ -362,11 +443,86 @@ router.put('/manufacturer-profile', [
     });
 
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.error('Update manufacturer profile error:', error);
     
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to update profile'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/buyer-onboarding
+ * @desc    Submit buyer onboarding data
+ * @access  Private
+ */
+router.post('/buyer-onboarding', [
+  body('full_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Full name is required and must be between 1 and 255 characters'),
+  body('email').isEmail().withMessage('Valid email is required'),
+  body('company_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Company name is required and must be between 1 and 255 characters'),
+  body('gst_number').optional().isLength({ min: 1, max: 20 }).withMessage('GST number must be between 1 and 20 characters'),
+  body('business_address').optional().isLength({ min: 1, max: 1000 }).withMessage('Business address must be between 1 and 1000 characters'),
+  body('about_business').optional().isLength({ min: 1, max: 2000 }).withMessage('About business must be between 1 and 2000 characters')
+], async (req, res) => {
+  try {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = authService.verifyJWT(token);
+
+    // Get or create profile from database
+    let profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
+    if (!profile) {
+      // Create new profile if it doesn't exist
+      profile = await authService.createBuyerProfile(decoded.phoneNumber);
+    }
+
+    // Submit onboarding data
+    const onboardingData = {
+      full_name: req.body.full_name,
+      email: req.body.email,
+      company_name: req.body.company_name,
+      gst_number: req.body.gst_number,
+      business_address: req.body.business_address,
+      about_business: req.body.about_business,
+      onboarding_completed: true,
+      onboarding_completed_at: new Date().toISOString()
+    };
+
+    const updatedProfile = await authService.submitBuyerOnboarding(profile.id, onboardingData);
+
+    res.status(200).json({
+      success: true,
+      message: 'Onboarding completed successfully',
+      data: {
+        profile: updatedProfile
+      }
+    });
+
+  } catch (error) {
+    console.error('Buyer onboarding submission error:', error);
+    
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to submit onboarding data'
     });
   }
 });

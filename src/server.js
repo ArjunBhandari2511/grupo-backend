@@ -7,6 +7,8 @@ require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const manufacturerRoutes = require('./routes/manufacturers');
+const buyerRoutes = require('./routes/buyers');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,6 +41,8 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/manufacturers', manufacturerRoutes);
+app.use('/api/buyers', buyerRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -49,6 +53,8 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString(),
     endpoints: {
       auth: '/api/auth',
+      manufacturers: '/api/manufacturers',
+      buyers: '/api/buyers',
       health: '/health'
     }
   });

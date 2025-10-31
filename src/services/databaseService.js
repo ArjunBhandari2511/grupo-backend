@@ -495,6 +495,116 @@ class DatabaseService {
       throw error;
     }
   }
+
+  /**
+   * Get all manufacturers
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of manufacturer profiles
+   */
+  async getAllManufacturers(options = {}) {
+    try {
+      let query = supabase.from('manufacturer_profiles').select('*');
+
+      // Apply filters if provided
+      if (options.verified !== undefined) {
+        query = query.eq('is_verified', options.verified);
+      }
+
+      if (options.verification_status) {
+        query = query.eq('verification_status', options.verification_status);
+      }
+
+      if (options.onboarding_completed !== undefined) {
+        query = query.eq('onboarding_completed', options.onboarding_completed);
+      }
+
+      if (options.business_type) {
+        query = query.eq('business_type', options.business_type);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        // Default sorting by created_at descending
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch manufacturers: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getAllManufacturers error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all buyers
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of buyer profiles
+   */
+  async getAllBuyers(options = {}) {
+    try {
+      let query = supabase.from('buyer_profiles').select('*');
+
+      // Apply filters if provided
+      if (options.verified !== undefined) {
+        query = query.eq('is_verified', options.verified);
+      }
+
+      if (options.verification_status) {
+        query = query.eq('verification_status', options.verification_status);
+      }
+
+      if (options.onboarding_completed !== undefined) {
+        query = query.eq('onboarding_completed', options.onboarding_completed);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        // Default sorting by created_at descending
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch buyers: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getAllBuyers error:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new DatabaseService();

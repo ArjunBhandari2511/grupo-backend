@@ -174,6 +174,32 @@ class DatabaseService {
   }
 
   /**
+   * Expire any active (unverified and unexpired) OTPs for a phone number
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<number>} number of rows updated
+   */
+  async expireActiveOtps(phoneNumber) {
+    try {
+      const { data, error } = await supabase
+        .from('otp_sessions')
+        .update({ expires_at: new Date().toISOString() })
+        .eq('phone_number', phoneNumber)
+        .eq('is_verified', false)
+        .gt('expires_at', new Date().toISOString())
+        .select('id');
+
+      if (error) {
+        throw new Error(`Failed to expire previous OTPs: ${error.message}`);
+      }
+
+      return Array.isArray(data) ? data.length : 0;
+    } catch (error) {
+      console.error('DatabaseService.expireActiveOtps error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Find OTP session by phone number
    * @param {string} phoneNumber - Phone number
    * @returns {Promise<Object|null>} OTP session or null
@@ -205,14 +231,12 @@ class DatabaseService {
    * @param {Object} updateData - Data to update
    * @returns {Promise<Object>} Updated OTP session
    */
-  async updateOTPSession(phoneNumber, updateData) {
+  async updateOTPSession(sessionId, updateData) {
     try {
       const { data, error } = await supabase
         .from('otp_sessions')
         .update(updateData)
-        .eq('phone_number', phoneNumber)
-        .order('created_at', { ascending: false })
-        .limit(1)
+        .eq('id', sessionId)
         .select()
         .single();
 

@@ -37,6 +37,14 @@ class AuthService {
         throw new Error('Invalid phone number format');
       }
 
+      // Proactively expire any previous active OTPs for this phone
+      try {
+        await databaseService.expireActiveOtps(phoneNumber);
+      } catch (e) {
+        // Do not block OTP sending if cleanup fails; log for observability
+        console.warn('Could not expire previous OTPs:', e?.message || e);
+      }
+
       // Generate new OTP
       const otp = this.generateOTP();
       const expiryTime = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRY_MINUTES) || 5) * 60 * 1000);
@@ -122,15 +130,15 @@ class AuthService {
 
       // Verify OTP
       if (storedOTP.otp_code !== otp) {
-        // Increment attempts
-        await databaseService.updateOTPSession(phoneNumber, {
+        // Increment attempts on the specific OTP session row
+        await databaseService.updateOTPSession(storedOTP.id, {
           attempts: storedOTP.attempts + 1
         });
         throw new Error('Invalid OTP');
       }
 
       // Mark OTP as verified
-      await databaseService.updateOTPSession(phoneNumber, {
+      await databaseService.updateOTPSession(storedOTP.id, {
         is_verified: true
       });
 

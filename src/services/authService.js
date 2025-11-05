@@ -186,8 +186,8 @@ class AuthService {
         }
       }
 
-      // Generate JWT token
-      const token = this.generateJWT(phoneNumber, role);
+      // Generate JWT token with profile id and role
+      const token = this.generateJWT(profile.id, phoneNumber, role);
 
       // Store user session in database
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
@@ -223,8 +223,9 @@ class AuthService {
    * @param {string} role - User role ('buyer' or 'manufacturer')
    * @returns {string} JWT token
    */
-  generateJWT(phoneNumber, role) {
+  generateJWT(userId, phoneNumber, role) {
     const payload = {
+      userId,
       phoneNumber,
       role,
       iat: Math.floor(Date.now() / 1000),

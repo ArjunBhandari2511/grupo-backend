@@ -4,11 +4,16 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 require('dotenv').config();
+const http = require('http');
+const { Server } = require('socket.io');
+const socketAuth = require('./middleware/wsAuth');
+const databaseService = require('./services/databaseService');
 
 // Import routes
 const authRoutes = require('./routes/auth');
 const manufacturerRoutes = require('./routes/manufacturers');
 const buyerRoutes = require('./routes/buyers');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -17,7 +22,11 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 
 // CORS configuration
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
+app.use(cors({ origin: (origin, cb) => {
+  if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) return cb(null, true);
+  cb(new Error('Not allowed by CORS'));
+}, credentials: true }));
 
 // Compression middleware
 app.use(compression());
@@ -43,6 +52,7 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/manufacturers', manufacturerRoutes);
 app.use('/api/buyers', buyerRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -55,16 +65,143 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       manufacturers: '/api/manufacturers',
       buyers: '/api/buyers',
+      chat: '/api/chat',
       health: '/health'
     }
   });
 });
 
+// HTTP server + Socket.IO
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: allowedOrigins.length ? allowedOrigins : true,
+    credentials: true
+  },
+  path: process.env.WS_PATH || '/socket.io'
+});
+
+// Presence tracking (simple in-memory)
+const onlineCounts = new Map(); // userId -> connection count
+
+io.use(socketAuth);
+
+io.on('connection', async (socket) => {
+  try {
+    const { userId, role } = socket.user;
+
+    // Join user-specific and role rooms
+    socket.join(`user:${userId}`);
+    if (role) socket.join(`role:${role}`);
+
+    // Presence increment
+    onlineCounts.set(userId, (onlineCounts.get(userId) || 0) + 1);
+    io.emit('presence', { userId, online: true });
+
+    // typing:start / typing:stop
+    socket.on('typing:start', async ({ conversationId }) => {
+      try {
+        if (!conversationId) return;
+        const convo = await databaseService.getConversation(conversationId);
+        if (!convo) return;
+        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
+        if (!isParticipant) return;
+        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('typing', { conversationId, userId, isTyping: true });
+      } catch (_) {}
+    });
+
+    socket.on('typing:stop', async ({ conversationId }) => {
+      try {
+        if (!conversationId) return;
+        const convo = await databaseService.getConversation(conversationId);
+        if (!convo) return;
+        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
+        if (!isParticipant) return;
+        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('typing', { conversationId, userId, isTyping: false });
+      } catch (_) {}
+    });
+
+    // message:send
+    socket.on('message:send', async ({ conversationId, body, clientTempId }) => {
+      try {
+        if (!conversationId || !body) return;
+        const convo = await databaseService.getConversation(conversationId);
+        if (!convo) return;
+        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
+        if (!isParticipant) return;
+
+        const sanitized = (typeof body === 'string' ? body.replace(/<[^>]*>/g, '') : '').slice(0, 4000);
+        const message = await databaseService.insertMessage(conversationId, role, userId, sanitized, clientTempId || null);
+
+        // Refresh conversation summary
+        const refreshed = await databaseService.getConversation(conversationId);
+
+        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('message:new', {
+          message,
+          conversationSummary: {
+            id: refreshed.id,
+            last_message_at: refreshed.last_message_at,
+            last_message_text: refreshed.last_message_text,
+            is_archived: refreshed.is_archived
+          }
+        });
+      } catch (err) {
+        console.error('WS message:send error:', err);
+      }
+    });
+
+    // message:read (supports upToMessageId)
+    socket.on('message:read', async ({ conversationId, upToMessageId }) => {
+      try {
+        if (!conversationId) return;
+        const convo = await databaseService.getConversation(conversationId);
+        if (!convo) return;
+        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
+        if (!isParticipant) return;
+
+        let upTo = new Date().toISOString();
+        if (upToMessageId) {
+          const { data: msg, error } = await require('./config/supabase')
+            .from('messages')
+            .select('created_at')
+            .eq('id', upToMessageId)
+            .single();
+          if (!error && msg) upTo = msg.created_at;
+        }
+
+        await databaseService.markRead(conversationId, userId, upTo);
+        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('message:read', {
+          conversationId,
+          readerUserId: userId,
+          upToMessageId: upToMessageId || null,
+          at: upTo
+        });
+      } catch (err) {
+        console.error('WS message:read error:', err);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      const current = onlineCounts.get(userId) || 0;
+      if (current <= 1) {
+        onlineCounts.delete(userId);
+        io.emit('presence', { userId, online: false });
+      } else {
+        onlineCounts.set(userId, current - 1);
+      }
+    });
+  } catch (e) {
+    console.error('Socket connection error:', e);
+    socket.disconnect(true);
+  }
+});
+
 // Start server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 Groupo Backend Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔌 WS path: ${process.env.WS_PATH || '/socket.io'}`);
 });
 
-module.exports = app;
+module.exports = { app, io };

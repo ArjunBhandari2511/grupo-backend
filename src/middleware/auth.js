@@ -20,6 +20,8 @@ const authenticateToken = (req, res, next) => {
 
     // Add user info to request
     req.user = {
+      userId: decoded.userId,
+      role: decoded.role,
       phoneNumber: decoded.phoneNumber,
       verified: true
     };
@@ -48,6 +50,8 @@ const optionalAuth = (req, res, next) => {
       const decoded = authService.verifyJWT(token);
       
       req.user = {
+        userId: decoded.userId,
+        role: decoded.role,
         phoneNumber: decoded.phoneNumber,
         verified: true
       };
@@ -73,8 +77,6 @@ const requireRole = (role) => {
       });
     }
 
-    // For now, we'll use phone number to determine role
-    // In production, you'd have a proper user role system
     const userRole = req.user.role || 'user';
     
     if (userRole !== role) {
@@ -91,5 +93,18 @@ const requireRole = (role) => {
 module.exports = {
   authenticateToken,
   optionalAuth,
-  requireRole
+  requireRole,
+  /**
+   * Decode a JWT token string and return user identity for non-HTTP contexts (e.g., WebSockets)
+   * @param {string} token
+   * @returns {{ userId: string, role: string, phoneNumber: string }}
+   */
+  decodeToken: (token) => {
+    const decoded = authService.verifyJWT(token);
+    return {
+      userId: decoded.userId,
+      role: decoded.role,
+      phoneNumber: decoded.phoneNumber
+    };
+  }
 };

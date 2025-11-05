@@ -2,6 +2,210 @@ const supabase = require('../config/supabase');
 
 class DatabaseService {
   /**
+   * Get or create a conversation between a buyer and a manufacturer
+   */
+  async getOrCreateConversation(buyerId, manufacturerId) {
+    try {
+      // Try to find existing
+      let { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('buyer_id', buyerId)
+        .eq('manufacturer_id', manufacturerId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(`Failed to fetch conversation: ${error.message}`);
+      }
+
+      if (!data) {
+        // Create new conversation
+        const insert = await supabase
+          .from('conversations')
+          .insert([{ buyer_id: buyerId, manufacturer_id: manufacturerId }])
+          .select('*')
+          .single();
+        if (insert.error) {
+          // If unique constraint hit due to race, fetch again
+          if (insert.error.code === '23505') {
+            const retry = await supabase
+              .from('conversations')
+              .select('*')
+              .eq('buyer_id', buyerId)
+              .eq('manufacturer_id', manufacturerId)
+              .single();
+            if (retry.error) throw new Error(`Failed to fetch conversation after conflict: ${retry.error.message}`);
+            return retry.data;
+          }
+          throw new Error(`Failed to create conversation: ${insert.error.message}`);
+        }
+        return insert.data;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.getOrCreateConversation error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * List conversations for a user based on role
+   */
+  async listConversations(userId, role, { search, limit = 50, cursor } = {}) {
+    try {
+      let query = supabase
+        .from('conversations')
+        .select('*')
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (role === 'buyer') {
+        query = query.eq('buyer_id', userId);
+      } else if (role === 'manufacturer') {
+        query = query.eq('manufacturer_id', userId);
+      }
+
+      if (cursor) {
+        query = query.lt('last_message_at', cursor);
+      }
+
+      if (search && typeof search === 'string' && search.trim().length > 0) {
+        query = query.ilike('last_message_text', `%${search.trim()}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(`Failed to list conversations: ${error.message}`);
+      }
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.listConversations error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if user is participant of conversation
+   */
+  async getConversation(conversationId) {
+    const { data, error } = await supabase
+      .from('conversations')
+      .select('*')
+      .eq('id', conversationId)
+      .single();
+    if (error) {
+      throw new Error(`Failed to fetch conversation: ${error.message}`);
+    }
+    return data;
+  }
+
+  /**
+   * List messages for a conversation
+   */
+  async listMessages(conversationId, { before, limit = 50 } = {}) {
+    try {
+      let query = supabase
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (before) {
+        query = query.lt('created_at', before);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(`Failed to list messages: ${error.message}`);
+      }
+      // return in ascending chronological order for UI
+      return (data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } catch (error) {
+      console.error('DatabaseService.listMessages error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Insert a new message and update conversation summary
+   */
+  async insertMessage(conversationId, senderRole, senderId, body, clientTempId) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([{ conversation_id: conversationId, sender_role: senderRole, sender_id: senderId, body, client_temp_id: clientTempId }])
+        .select('*')
+        .single();
+      if (error) {
+        throw new Error(`Failed to insert message: ${error.message}`);
+      }
+
+      const updated = await supabase
+        .from('conversations')
+        .update({ last_message_at: data.created_at, last_message_text: body })
+        .eq('id', conversationId)
+        .select('id')
+        .single();
+      if (updated.error) {
+        console.warn('Failed to update conversation summary:', updated.error.message);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.insertMessage error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark messages as read up to a timestamp (or up to a message id)
+   */
+  async markRead(conversationId, readerUserId, upToIsoTimestamp) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .update({ is_read: true })
+        .eq('conversation_id', conversationId)
+        .lt('created_at', upToIsoTimestamp)
+        .neq('sender_id', readerUserId)
+        .select('id');
+      if (error) {
+        throw new Error(`Failed to mark messages read: ${error.message}`);
+      }
+      return Array.isArray(data) ? data.length : 0;
+    } catch (error) {
+      console.error('DatabaseService.markRead error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark messages as read up to a specific message id (resolves its timestamp)
+   */
+  async markReadByMessageId(conversationId, readerUserId, role, upToMessageId) {
+    try {
+      let upTo = new Date().toISOString();
+      if (upToMessageId) {
+        const { data: msg, error: msgErr } = await supabase
+          .from('messages')
+          .select('created_at, conversation_id')
+          .eq('id', upToMessageId)
+          .single();
+        if (!msgErr && msg && msg.conversation_id === conversationId) {
+          upTo = msg.created_at;
+        }
+      }
+
+      return await this.markRead(conversationId, readerUserId, upTo);
+    } catch (error) {
+      console.error('DatabaseService.markReadByMessageId error:', error);
+      throw error;
+    }
+  }
+  /**
    * Create a new buyer profile
    * @param {Object} profileData - Buyer profile data
    * @returns {Promise<Object>} Created buyer profile

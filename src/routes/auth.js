@@ -142,8 +142,48 @@ router.post('/refresh-token', async (req, res) => {
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Generate new token
-    const newToken = authService.generateJWT(decoded.phoneNumber, decoded.role);
+    // Generate new token (preserve user id and role)
+    const newToken = authService.generateJWT(decoded.userId, decoded.phoneNumber, decoded.role);
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: {
+        token: newToken,
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+      }
+    });
+
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    
+    res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/refresh
+ * @desc    Refresh JWT token (alias)
+ * @access  Private
+ */
+router.post('/refresh', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = authService.verifyJWT(token);
+
+    const newToken = authService.generateJWT(decoded.userId, decoded.phoneNumber, decoded.role);
 
     res.status(200).json({
       success: true,

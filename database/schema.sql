@@ -172,6 +172,54 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- =============================================
+-- Real-time Chat Schema
+-- =============================================
+
+-- Conversations between a buyer and a manufacturer
+CREATE TABLE IF NOT EXISTS conversations (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  buyer_id UUID NOT NULL REFERENCES buyer_profiles(id) ON DELETE CASCADE,
+  manufacturer_id UUID NOT NULL REFERENCES manufacturer_profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_message_at TIMESTAMP WITH TIME ZONE,
+  last_message_text TEXT,
+  is_archived BOOLEAN DEFAULT FALSE,
+  CONSTRAINT uq_conversation_participants UNIQUE (buyer_id, manufacturer_id)
+);
+
+-- Messages within a conversation
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  sender_role VARCHAR(20) NOT NULL CHECK (sender_role IN ('buyer', 'manufacturer')),
+  sender_id UUID NOT NULL,
+  body TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  is_read BOOLEAN DEFAULT FALSE,
+  client_temp_id VARCHAR(64)
+);
+
+-- Optional: attachments for messages
+CREATE TABLE IF NOT EXISTS message_attachments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  file_url TEXT NOT NULL,
+  mime_type VARCHAR(255),
+  size_bytes INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for chat tables
+CREATE INDEX IF NOT EXISTS idx_conversations_buyer_manufacturer ON conversations(buyer_id, manufacturer_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_last_message_at ON conversations(last_message_at);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages(is_read);
+
+CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
+
 -- Function to clean up expired sessions
 CREATE OR REPLACE FUNCTION cleanup_expired_sessions()
 RETURNS INTEGER AS $$

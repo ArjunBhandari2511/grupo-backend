@@ -132,7 +132,7 @@ class DatabaseService {
   /**
    * Insert a new message and update conversation summary
    */
-  async insertMessage(conversationId, senderRole, senderId, body, clientTempId) {
+  async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText) {
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -145,7 +145,7 @@ class DatabaseService {
 
       const updated = await supabase
         .from('conversations')
-        .update({ last_message_at: data.created_at, last_message_text: body })
+        .update({ last_message_at: data.created_at, last_message_text: summaryText ?? body })
         .eq('id', conversationId)
         .select('id')
         .single();
@@ -156,6 +156,106 @@ class DatabaseService {
       return data;
     } catch (error) {
       console.error('DatabaseService.insertMessage error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Insert message attachments
+   * @param {string} messageId - Message ID
+   * @param {Array} attachments - Array of attachment objects
+   * @returns {Promise<Array>} Array of inserted attachments
+   */
+  async insertMessageAttachments(messageId, attachments) {
+    try {
+      if (!attachments || attachments.length === 0) {
+        return [];
+      }
+
+      const attachmentRecords = attachments.map(att => ({
+        message_id: messageId,
+        file_url: att.url,
+        mime_type: att.mimeType,
+        size_bytes: att.size,
+        file_type: att.fileType,
+        original_name: att.originalName,
+        public_id: att.publicId,
+        thumbnail_url: att.thumbnail,
+        width: att.width,
+        height: att.height,
+        duration: att.duration
+      }));
+
+      const { data, error } = await supabase
+        .from('message_attachments')
+        .insert(attachmentRecords)
+        .select('*');
+
+      if (error) {
+        throw new Error(`Failed to insert attachments: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.insertMessageAttachments error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get message attachments
+   * @param {string} messageId - Message ID
+   * @returns {Promise<Array>} Array of attachments
+   */
+  async getMessageAttachments(messageId) {
+    try {
+      const { data, error } = await supabase
+        .from('message_attachments')
+        .select('*')
+        .eq('message_id', messageId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        throw new Error(`Failed to get attachments: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getMessageAttachments error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get messages with attachments
+   * @param {string} conversationId - Conversation ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of messages with attachments
+   */
+  async listMessagesWithAttachments(conversationId, { before, limit = 50 } = {}) {
+    try {
+      let query = supabase
+        .from('messages')
+        .select(`
+          *,
+          attachments:message_attachments(*)
+        `)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (before) {
+        query = query.lt('created_at', before);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        throw new Error(`Failed to list messages with attachments: ${error.message}`);
+      }
+      // return in ascending chronological order for UI
+      return (data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } catch (error) {
+      console.error('DatabaseService.listMessagesWithAttachments error:', error);
       throw error;
     }
   }

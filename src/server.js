@@ -8,12 +8,14 @@ const http = require('http');
 const { Server } = require('socket.io');
 const socketAuth = require('./middleware/wsAuth');
 const databaseService = require('./services/databaseService');
+const { buildMessageSummary } = require('./utils/messageSummary');
 
 // Import routes
 const authRoutes = require('./routes/auth');
 const manufacturerRoutes = require('./routes/manufacturers');
 const buyerRoutes = require('./routes/buyers');
 const chatRoutes = require('./routes/chat');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -53,6 +55,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/manufacturers', manufacturerRoutes);
 app.use('/api/buyers', buyerRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -122,22 +125,42 @@ io.on('connection', async (socket) => {
     });
 
     // message:send
-    socket.on('message:send', async ({ conversationId, body, clientTempId }) => {
+    socket.on('message:send', async ({ conversationId, body, clientTempId, attachments }) => {
       try {
-        if (!conversationId || !body) return;
+        if (!conversationId) return;
+        
+        // Either body or attachments must be present
+        const hasBody = body && typeof body === 'string' && body.trim().length > 0;
+        const hasAttachments = attachments && Array.isArray(attachments) && attachments.length > 0;
+        
+        if (!hasBody && !hasAttachments) return;
+        
         const convo = await databaseService.getConversation(conversationId);
         if (!convo) return;
         const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
         if (!isParticipant) return;
 
-        const sanitized = (typeof body === 'string' ? body.replace(/<[^>]*>/g, '') : '').slice(0, 4000);
-        const message = await databaseService.insertMessage(conversationId, role, userId, sanitized, clientTempId || null);
+        const sanitized = hasBody ? (typeof body === 'string' ? body.replace(/<[^>]*>/g, '') : '').slice(0, 4000) : '';
+        const summaryText = buildMessageSummary(sanitized, hasAttachments ? attachments : []);
+        const message = await databaseService.insertMessage(conversationId, role, userId, sanitized, clientTempId || null, summaryText);
+
+        // Insert attachments if any
+        let messageAttachments = [];
+        if (hasAttachments) {
+          messageAttachments = await databaseService.insertMessageAttachments(message.id, attachments);
+        }
+
+        // Add attachments to message object
+        const messageWithAttachments = {
+          ...message,
+          attachments: messageAttachments
+        };
 
         // Refresh conversation summary
         const refreshed = await databaseService.getConversation(conversationId);
 
         io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('message:new', {
-          message,
+          message: messageWithAttachments,
           conversationSummary: {
             id: refreshed.id,
             last_message_at: refreshed.last_message_at,

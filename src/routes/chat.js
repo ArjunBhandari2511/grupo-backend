@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
 const databaseService = require('../services/databaseService');
+const { buildMessageSummary } = require('../utils/messageSummary');
 
 const router = express.Router();
 
@@ -125,7 +126,8 @@ router.get('/conversations/:id/messages', [
       return res.status(403).json({ success: false, message: 'Not authorized to view this conversation' });
     }
 
-    const messages = await databaseService.listMessages(conversationId, { before, limit });
+    // Get messages with attachments
+    const messages = await databaseService.listMessagesWithAttachments(conversationId, { before, limit });
     res.status(200).json({ success: true, data: { messages } });
   } catch (error) {
     console.error('List messages error:', error);
@@ -136,8 +138,9 @@ router.get('/conversations/:id/messages', [
 // POST /conversations/:id/messages → send message
 router.post('/conversations/:id/messages', [
   param('id').isUUID().withMessage('conversation id must be a valid UUID'),
-  body('body').isString().isLength({ min: 1, max: 4000 }).withMessage('body is required'),
-  body('clientTempId').optional().isString().isLength({ max: 64 })
+  body('body').optional().isString().isLength({ max: 4000 }).withMessage('body must be at most 4000 characters'),
+  body('clientTempId').optional().isString().isLength({ max: 64 }),
+  body('attachments').optional().isArray().withMessage('attachments must be an array')
 ], authenticateToken, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -152,11 +155,32 @@ router.post('/conversations/:id/messages', [
       return res.status(403).json({ success: false, message: 'Not authorized to send in this conversation' });
     }
 
-    const cleanBody = sanitizeBody(req.body.body);
-    const message = await databaseService.insertMessage(conversationId, role, userId, cleanBody, req.body.clientTempId || null);
+    // Either body or attachments must be present
+    const hasBody = req.body.body && req.body.body.trim().length > 0;
+    const hasAttachments = req.body.attachments && Array.isArray(req.body.attachments) && req.body.attachments.length > 0;
+    
+    if (!hasBody && !hasAttachments) {
+      return res.status(400).json({ success: false, message: 'Either body or attachments must be provided' });
+    }
+
+    const cleanBody = hasBody ? sanitizeBody(req.body.body) : '';
+    const summaryText = buildMessageSummary(cleanBody, hasAttachments ? req.body.attachments : []);
+    const message = await databaseService.insertMessage(conversationId, role, userId, cleanBody, req.body.clientTempId || null, summaryText);
+
+    // Insert attachments if any
+    let attachments = [];
+    if (hasAttachments) {
+      attachments = await databaseService.insertMessageAttachments(message.id, req.body.attachments);
+    }
+
+    // Return message with attachments
+    const messageWithAttachments = {
+      ...message,
+      attachments
+    };
 
     // WS fanout will be added in the WebSocket step
-    res.status(201).json({ success: true, data: { message } });
+    res.status(201).json({ success: true, data: { message: messageWithAttachments } });
   } catch (error) {
     console.error('Send message error:', error);
     res.status(400).json({ success: false, message: error.message || 'Failed to send message' });

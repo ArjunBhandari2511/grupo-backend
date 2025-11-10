@@ -16,6 +16,7 @@ const manufacturerRoutes = require('./routes/manufacturers');
 const buyerRoutes = require('./routes/buyers');
 const chatRoutes = require('./routes/chat');
 const uploadRoutes = require('./routes/upload');
+const requirementsRoutes = require('./routes/requirements');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,6 +57,7 @@ app.use('/api/manufacturers', manufacturerRoutes);
 app.use('/api/buyers', buyerRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/requirements', requirementsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -69,6 +71,8 @@ app.get('/', (req, res) => {
       manufacturers: '/api/manufacturers',
       buyers: '/api/buyers',
       chat: '/api/chat',
+      requirements: '/api/requirements',
+      upload: '/api/upload',
       health: '/health'
     }
   });

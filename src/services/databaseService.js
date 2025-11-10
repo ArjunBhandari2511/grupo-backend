@@ -933,6 +933,370 @@ class DatabaseService {
       throw error;
     }
   }
+
+  // =============================================
+  // REQUIREMENTS METHODS
+  // =============================================
+
+  /**
+   * Create a new requirement
+   * @param {Object} requirementData - Requirement data
+   * @returns {Promise<Object>} Created requirement
+   */
+  async createRequirement(requirementData) {
+    try {
+      const { data, error } = await supabase
+        .from('requirements')
+        .insert([requirementData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create requirement: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.createRequirement error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get requirements for a buyer
+   * @param {string} buyerId - Buyer profile ID
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of requirements
+   */
+  async getBuyerRequirements(buyerId, options = {}) {
+    try {
+      let query = supabase
+        .from('requirements')
+        .select('*')
+        .eq('buyer_id', buyerId);
+
+      // Apply filters
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        // Default sorting by created_at descending
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch requirements: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getBuyerRequirements error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single requirement by ID
+   * @param {string} requirementId - Requirement ID
+   * @returns {Promise<Object>} Requirement data
+   */
+  async getRequirement(requirementId) {
+    try {
+      const { data, error } = await supabase
+        .from('requirements')
+        .select('*')
+        .eq('id', requirementId)
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to fetch requirement: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.getRequirement error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a requirement
+   * @param {string} requirementId - Requirement ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated requirement
+   */
+  async updateRequirement(requirementId, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('requirements')
+        .update({
+          ...updateData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requirementId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update requirement: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.updateRequirement error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a requirement
+   * @param {string} requirementId - Requirement ID
+   * @returns {Promise<boolean>} Success status
+   */
+  async deleteRequirement(requirementId) {
+    try {
+      const { error } = await supabase
+        .from('requirements')
+        .delete()
+        .eq('id', requirementId);
+
+      if (error) {
+        throw new Error(`Failed to delete requirement: ${error.message}`);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('DatabaseService.deleteRequirement error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all requirements (for manufacturers to view)
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of requirements with buyer info
+   */
+  async getAllRequirements(options = {}) {
+    try {
+      let query = supabase
+        .from('requirements')
+        .select(`
+          *,
+          buyer:buyer_profiles(id, full_name, company_name, phone_number, business_address)
+        `);
+
+      // Apply filters
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        // Default sorting by created_at descending
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch all requirements: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getAllRequirements error:', error);
+      throw error;
+    }
+  }
+
+  // =============================================
+  // REQUIREMENT RESPONSES METHODS
+  // =============================================
+
+  /**
+   * Create a requirement response (manufacturer responds to a requirement)
+   * @param {Object} responseData - Response data
+   * @returns {Promise<Object>} Created response
+   */
+  async createRequirementResponse(responseData) {
+    try {
+      const { data, error } = await supabase
+        .from('requirement_responses')
+        .insert([responseData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create requirement response: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.createRequirementResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get responses for a specific requirement
+   * @param {string} requirementId - Requirement ID
+   * @returns {Promise<Array>} Array of responses
+   */
+  async getRequirementResponses(requirementId) {
+    try {
+      const { data, error } = await supabase
+        .from('requirement_responses')
+        .select(`
+          *,
+          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+        `)
+        .eq('requirement_id', requirementId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(`Failed to fetch requirement responses: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getRequirementResponses error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get manufacturer's response to a specific requirement
+   * @param {string} requirementId - Requirement ID
+   * @param {string} manufacturerId - Manufacturer ID
+   * @returns {Promise<Object|null>} Response or null
+   */
+  async getManufacturerResponse(requirementId, manufacturerId) {
+    try {
+      const { data, error } = await supabase
+        .from('requirement_responses')
+        .select('*')
+        .eq('requirement_id', requirementId)
+        .eq('manufacturer_id', manufacturerId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw new Error(`Failed to fetch manufacturer response: ${error.message}`);
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('DatabaseService.getManufacturerResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a requirement response
+   * @param {string} responseId - Response ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated response
+   */
+  async updateRequirementResponse(responseId, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('requirement_responses')
+        .update({
+          ...updateData,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', responseId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update requirement response: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.updateRequirementResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all responses from a manufacturer
+   * @param {string} manufacturerId - Manufacturer ID
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of responses with requirement info
+   */
+  async getManufacturerResponses(manufacturerId, options = {}) {
+    try {
+      let query = supabase
+        .from('requirement_responses')
+        .select(`
+          *,
+          requirement:requirements(id, requirement_text, quantity, brand_name, product_type, status, created_at, buyer_id)
+        `)
+        .eq('manufacturer_id', manufacturerId);
+
+      // Apply filters
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch manufacturer responses: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getManufacturerResponses error:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new DatabaseService();

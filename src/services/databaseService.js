@@ -79,7 +79,37 @@ class DatabaseService {
       if (error) {
         throw new Error(`Failed to list conversations: ${error.message}`);
       }
-      return data || [];
+      const conversations = data || [];
+
+      const withUnreadCounts = await Promise.all(
+        conversations.map(async (conversation) => {
+          try {
+            const { count, error: unreadError } = await supabase
+              .from('messages')
+              .select('id', { count: 'exact', head: true })
+              .eq('conversation_id', conversation.id)
+              .eq('is_read', false)
+              .neq('sender_id', userId);
+
+            if (unreadError) {
+              throw unreadError;
+            }
+
+            return {
+              ...conversation,
+              unread_count: typeof count === 'number' ? count : 0
+            };
+          } catch (unreadCountError) {
+            console.error('DatabaseService.listConversations unread count error:', unreadCountError);
+            return {
+              ...conversation,
+              unread_count: 0
+            };
+          }
+        })
+      );
+
+      return withUnreadCounts;
     } catch (error) {
       console.error('DatabaseService.listConversations error:', error);
       throw error;

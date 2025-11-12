@@ -438,5 +438,71 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @route   PATCH /api/requirements/responses/:responseId/status
+ * @desc    Update response status (accept/reject) - Buyer only
+ * @access  Private (Buyer only)
+ */
+router.patch('/responses/:responseId/status', authenticateToken, async (req, res) => {
+  try {
+    // Ensure user is a buyer
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only buyers can update response status'
+      });
+    }
+
+    const { responseId } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!status || !['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be either "accepted" or "rejected"'
+      });
+    }
+
+    // Get the response and verify ownership
+    const response = await databaseService.getRequirementResponseById(responseId);
+    
+    if (!response) {
+      return res.status(404).json({
+        success: false,
+        message: 'Response not found'
+      });
+    }
+
+    // Get the requirement to verify buyer ownership
+    const requirement = await databaseService.getRequirement(response.requirement_id);
+    
+    if (!requirement || requirement.buyer_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this response'
+      });
+    }
+
+    // Update response status
+    const updatedResponse = await databaseService.updateRequirementResponse(responseId, {
+      status
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Response ${status} successfully`,
+      data: updatedResponse
+    });
+  } catch (error) {
+    console.error('Update response status error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update response status',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 

@@ -1249,6 +1249,30 @@ class DatabaseService {
   }
 
   /**
+   * Get a requirement response by ID
+   * @param {string} responseId - Response ID
+   * @returns {Promise<Object|null>} Response object or null
+   */
+  async getRequirementResponseById(responseId) {
+    try {
+      const { data, error } = await supabase
+        .from('requirement_responses')
+        .select('*')
+        .eq('id', responseId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        throw new Error(`Failed to fetch requirement response: ${error.message}`);
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error('DatabaseService.getRequirementResponseById error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update a requirement response
    * @param {string} responseId - Response ID
    * @param {Object} updateData - Data to update

@@ -352,6 +352,49 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/requirements/responses/my-responses
+ * @desc    Get all responses from the authenticated manufacturer
+ * @access  Private (Manufacturer only)
+ * @note    This route MUST come before /:id/responses to avoid route conflicts
+ */
+router.get('/responses/my-responses', authenticateToken, async (req, res) => {
+  try {
+    // Ensure user is a manufacturer
+    if (req.user.role !== 'manufacturer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only manufacturers can access this endpoint'
+      });
+    }
+
+    const { status, limit, offset, sortBy, sortOrder } = req.query;
+
+    const options = {
+      status,
+      limit: limit ? parseInt(limit) : 50,
+      offset: offset ? parseInt(offset) : 0,
+      sortBy,
+      sortOrder
+    };
+
+    const responses = await databaseService.getManufacturerResponses(req.user.userId, options);
+
+    return res.status(200).json({
+      success: true,
+      data: responses,
+      count: responses.length
+    });
+  } catch (error) {
+    console.error('Get manufacturer responses error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch responses',
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/requirements/:id/responses
  * @desc    Get all responses for a requirement
  * @access  Private
@@ -387,48 +430,6 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Get requirement responses error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch responses',
-      error: error.message
-    });
-  }
-});
-
-/**
- * @route   GET /api/requirements/responses/my-responses
- * @desc    Get all responses from the authenticated manufacturer
- * @access  Private (Manufacturer only)
- */
-router.get('/responses/my-responses', authenticateToken, async (req, res) => {
-  try {
-    // Ensure user is a manufacturer
-    if (req.user.role !== 'manufacturer') {
-      return res.status(403).json({
-        success: false,
-        message: 'Only manufacturers can access this endpoint'
-      });
-    }
-
-    const { status, limit, offset, sortBy, sortOrder } = req.query;
-
-    const options = {
-      status,
-      limit: limit ? parseInt(limit) : 50,
-      offset: offset ? parseInt(offset) : 0,
-      sortBy,
-      sortOrder
-    };
-
-    const responses = await databaseService.getManufacturerResponses(req.user.userId, options);
-
-    return res.status(200).json({
-      success: true,
-      data: responses,
-      count: responses.length
-    });
-  } catch (error) {
-    console.error('Get manufacturer responses error:', error);
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch responses',

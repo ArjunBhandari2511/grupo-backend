@@ -992,11 +992,6 @@ class DatabaseService {
         .select('*')
         .eq('buyer_id', buyerId);
 
-      // Apply filters
-      if (options.status) {
-        query = query.eq('status', options.status);
-      }
-
       // Apply sorting
       if (options.sortBy) {
         const ascending = options.sortOrder === 'asc';
@@ -1117,11 +1112,6 @@ class DatabaseService {
           *,
           buyer:buyer_profiles(id, full_name, phone_number, business_address)
         `);
-
-      // Apply filters
-      if (options.status) {
-        query = query.eq('status', options.status);
-      }
 
       // Apply sorting
       if (options.sortBy) {
@@ -1300,7 +1290,7 @@ class DatabaseService {
         .from('requirement_responses')
         .select(`
           *,
-          requirement:requirements(id, requirement_text, quantity, brand_name, product_type, status, created_at, buyer_id)
+          requirement:requirements(id, requirement_text, quantity, brand_name, product_type, created_at, buyer_id)
         `)
         .eq('manufacturer_id', manufacturerId);
 
@@ -1337,6 +1327,95 @@ class DatabaseService {
       console.error('DatabaseService.getManufacturerResponses error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Get all orders (requirements with responses) - can be filtered by status
+   * @param {Object} options - Query options (status filter, sorting, pagination)
+   * @returns {Promise<Array>} Array of orders with buyer and manufacturer info
+   */
+  async getOrders(options = {}) {
+    try {
+      let query = supabase
+        .from('requirement_responses')
+        .select(`
+          *,
+          requirement:requirements(
+            id,
+            requirement_text,
+            quantity,
+            brand_name,
+            product_type,
+            created_at,
+            buyer:buyer_profiles(id, full_name, phone_number, business_address)
+          ),
+          manufacturer:manufacturer_profiles(id, unit_name, phone_number, location, business_type)
+        `);
+
+      // Apply status filter if provided
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+
+      // Apply sorting
+      if (options.sortBy) {
+        const ascending = options.sortOrder === 'asc';
+        query = query.order(options.sortBy, { ascending });
+      } else {
+        // Default sorting by created_at descending (most recent first)
+        query = query.order('created_at', { ascending: false });
+      }
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 100) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch orders: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getOrders error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all accepted orders (requirements with accepted responses)
+   * @param {Object} options - Query options (sorting, pagination)
+   * @returns {Promise<Array>} Array of accepted orders with buyer and manufacturer info
+   * @deprecated Use getOrders({ status: 'accepted' }) instead
+   */
+  async getAcceptedOrders(options = {}) {
+    return this.getOrders({ ...options, status: 'accepted' });
+  }
+
+  /**
+   * Get all rejected orders (requirements with rejected responses)
+   * @param {Object} options - Query options (sorting, pagination)
+   * @returns {Promise<Array>} Array of rejected orders with buyer and manufacturer info
+   * @deprecated Use getOrders({ status: 'rejected' }) instead
+   */
+  async getRejectedOrders(options = {}) {
+    return this.getOrders({ ...options, status: 'rejected' });
+  }
+
+  /**
+   * Get all pending orders (requirements with submitted/pending responses)
+   * @param {Object} options - Query options (sorting, pagination)
+   * @returns {Promise<Array>} Array of pending orders with buyer and manufacturer info
+   * @deprecated Use getOrders({ status: 'submitted' }) instead
+   */
+  async getPendingOrders(options = {}) {
+    return this.getOrders({ ...options, status: 'submitted' });
   }
 }
 

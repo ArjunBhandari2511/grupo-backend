@@ -256,3 +256,53 @@ BEGIN
   WHERE mp.phone_number = phone_num;
 END;
 $$ LANGUAGE plpgsql;
+
+-- =============================================
+-- Requirements Schema
+-- =============================================
+
+-- Requirements table - buyers submit manufacturing requirements
+CREATE TABLE IF NOT EXISTS requirements (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  buyer_id UUID NOT NULL REFERENCES buyer_profiles(id) ON DELETE CASCADE,
+  requirement_text TEXT NOT NULL,
+  quantity INTEGER,
+  brand_name VARCHAR(255),
+  product_type VARCHAR(255),
+  product_link TEXT,
+  image_url TEXT,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Requirement responses table - manufacturers respond to requirements
+CREATE TABLE IF NOT EXISTS requirement_responses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  requirement_id UUID NOT NULL REFERENCES requirements(id) ON DELETE CASCADE,
+  manufacturer_id UUID NOT NULL REFERENCES manufacturer_profiles(id) ON DELETE CASCADE,
+  quoted_price DECIMAL(10, 2) NOT NULL,
+  price_per_unit DECIMAL(10, 2) NOT NULL,
+  delivery_time VARCHAR(255) NOT NULL,
+  notes TEXT,
+  status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT uq_requirement_manufacturer UNIQUE (requirement_id, manufacturer_id)
+);
+
+-- Indexes for requirements tables
+CREATE INDEX IF NOT EXISTS idx_requirements_buyer_id ON requirements(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at);
+
+CREATE INDEX IF NOT EXISTS idx_requirement_responses_requirement_id ON requirement_responses(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_requirement_responses_manufacturer_id ON requirement_responses(manufacturer_id);
+CREATE INDEX IF NOT EXISTS idx_requirement_responses_status ON requirement_responses(status);
+
+-- Trigger for requirements updated_at
+CREATE TRIGGER update_requirements_updated_at BEFORE UPDATE ON requirements
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for requirement_responses updated_at
+CREATE TRIGGER update_requirement_responses_updated_at BEFORE UPDATE ON requirement_responses
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

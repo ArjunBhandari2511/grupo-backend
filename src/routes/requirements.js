@@ -4,6 +4,71 @@ const databaseService = require('../services/databaseService');
 const { authenticateToken } = require('../middleware/auth');
 
 /**
+ * Admin authentication middleware
+ * Allows hardcoded admin token for demo purposes
+ */
+const authenticateAdmin = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. No token provided.'
+      });
+    }
+
+    const token = authHeader.substring(7);
+    
+    // Check for hardcoded admin token (for demo/dev purposes)
+    const ADMIN_TOKENS = [
+      'demo_admin_token',
+      process.env.ADMIN_TOKEN // Allow env-based admin token
+    ].filter(Boolean);
+    
+    if (ADMIN_TOKENS.includes(token)) {
+      // Set admin user for demo
+      req.user = {
+        userId: 'admin_demo',
+        role: 'admin',
+        phoneNumber: 'admin',
+        verified: true
+      };
+      return next();
+    }
+    
+    // Try normal JWT authentication as fallback
+    try {
+      const authService = require('../services/authService');
+      const decoded = authService.verifyJWT(token);
+      
+      if (decoded.role === 'admin') {
+        req.user = {
+          userId: decoded.userId,
+          role: decoded.role,
+          phoneNumber: decoded.phoneNumber,
+          verified: true
+        };
+        return next();
+      }
+    } catch (jwtError) {
+      // JWT verification failed, continue to error
+    }
+    
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Invalid admin token.'
+    });
+  } catch (error) {
+    console.error('Admin authentication error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication failed'
+    });
+  }
+};
+
+/**
  * @route   POST /api/requirements
  * @desc    Create a new requirement
  * @access  Private (Buyer only)
@@ -45,8 +110,7 @@ router.post('/', authenticateToken, async (req, res) => {
       product_type: product_type ? product_type.trim() : null,
       product_link: product_link ? product_link.trim() : null,
       image_url: image_url ? image_url.trim() : null,
-      notes: notes ? notes.trim() : null,
-      status: 'pending'
+      notes: notes ? notes.trim() : null
     };
 
     // Create requirement in database
@@ -74,10 +138,9 @@ router.post('/', authenticateToken, async (req, res) => {
  */
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { status, limit, offset, sortBy, sortOrder } = req.query;
+    const { limit, offset, sortBy, sortOrder } = req.query;
 
     const options = {
-      status,
       limit: limit ? parseInt(limit) : 50,
       offset: offset ? parseInt(offset) : 0,
       sortBy,
@@ -188,7 +251,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       product_type,
       product_link,
       image_url,
-      status,
       notes
     } = req.body;
 
@@ -200,7 +262,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (product_type !== undefined) updateData.product_type = product_type.trim();
     if (product_link !== undefined) updateData.product_link = product_link.trim();
     if (image_url !== undefined) updateData.image_url = image_url.trim();
-    if (status !== undefined) updateData.status = status;
     if (notes !== undefined) updateData.notes = notes.trim();
 
     // Update requirement in database
@@ -499,6 +560,45 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
     return res.status(500).json({
       success: false,
       message: 'Failed to update response status',
+      error: error.message
+    });
+  }
+});
+
+// =============================================
+// ADMIN ORDERS ROUTES
+// =============================================
+
+/**
+ * @route   GET /api/requirements/admin/orders
+ * @desc    Get all orders with optional status filter (Admin only)
+ * @access  Private (Admin only)
+ * @query   status - Optional filter: 'accepted', 'rejected', 'submitted' (pending), or omit for all
+ */
+router.get('/admin/orders', authenticateAdmin, async (req, res) => {
+  try {
+    const { status, limit, offset, sortBy, sortOrder } = req.query;
+
+    const options = {
+      status: status || undefined, // Filter by status if provided
+      limit: limit ? parseInt(limit) : 100,
+      offset: offset ? parseInt(offset) : 0,
+      sortBy,
+      sortOrder
+    };
+
+    const orders = await databaseService.getOrders(options);
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+      count: orders.length
+    });
+  } catch (error) {
+    console.error('Get orders error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch orders',
       error: error.message
     });
   }

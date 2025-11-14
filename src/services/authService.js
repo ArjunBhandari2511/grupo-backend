@@ -182,20 +182,32 @@ class AuthService {
           });
           console.log(`Existing manufacturer profile verified: ${phoneNumber}`);
         }
+      } else if (role === 'admin') {
+        // For admin, we don't create a profile but still need a user ID for JWT
+        // Use a dummy profile structure or check for admin profiles
+        // For now, we'll use a mock profile structure with phone number as ID
+        profile = {
+          id: `admin_${phoneNumber.replace(/\+/g, '')}`,
+          phone_number: phoneNumber,
+          role: 'admin'
+        };
+        console.log(`Admin authentication: ${phoneNumber}`);
       }
 
       // Generate JWT token with profile id and role
       const token = this.generateJWT(profile.id, phoneNumber, role);
 
-      // Store user session in database
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const sessionData = {
-        profile_id: profile.id,
-        profile_type: role,
-        token_hash: tokenHash,
-        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
-      };
-      await databaseService.storeUserSession(sessionData);
+      // Store user session in database (skip for admin as they don't have a profile)
+      if (role !== 'admin') {
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const sessionData = {
+          profile_id: profile.id,
+          profile_type: role,
+          token_hash: tokenHash,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+        };
+        await databaseService.storeUserSession(sessionData);
+      }
 
       return {
         success: true,

@@ -4,6 +4,15 @@ const authService = require('../services/authService');
 
 const router = express.Router();
 
+/**
+ * Admin credentials (hardcoded for demo purposes)
+ * In production, these should be stored securely in environment variables or a database
+ */
+const ADMIN_CREDENTIALS = {
+  username: process.env.ADMIN_USERNAME || 'admin72397',
+  password: process.env.ADMIN_PASSWORD || '72397admin'
+};
+
 // Validation middleware
 const validatePhoneNumber = [
   body('phoneNumber')
@@ -18,8 +27,8 @@ const validatePhoneNumber = [
     }),
   body('role')
     .optional()
-    .isIn(['buyer', 'manufacturer'])
-    .withMessage('Role must be either buyer or manufacturer')
+    .isIn(['buyer', 'manufacturer', 'admin'])
+    .withMessage('Role must be either buyer, manufacturer, or admin')
 ];
 
 const validateOTP = [
@@ -33,8 +42,8 @@ const validateOTP = [
     .withMessage('OTP must contain only numbers'),
   body('role')
     .optional()
-    .isIn(['buyer', 'manufacturer'])
-    .withMessage('Role must be either buyer or manufacturer')
+    .isIn(['buyer', 'manufacturer', 'admin'])
+    .withMessage('Role must be either buyer, manufacturer, or admin')
 ];
 
 /**
@@ -488,6 +497,67 @@ router.put('/manufacturer-profile', [
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to update profile'
+    });
+  }
+});
+
+/**
+ * @route   POST /api/auth/admin-login
+ * @desc    Admin login with username and password
+ * @access  Public
+ */
+router.post('/admin-login', [
+  body('username')
+    .notEmpty()
+    .withMessage('Username is required'),
+  body('password')
+    .notEmpty()
+    .withMessage('Password is required')
+], async (req, res) => {
+  try {
+    // Check validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+
+    const { username, password } = req.body;
+
+    // Verify admin credentials
+    if (username !== ADMIN_CREDENTIALS.username || password !== ADMIN_CREDENTIALS.password) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid username or password'
+      });
+    }
+
+    // Generate JWT token for admin
+    const adminProfileId = 'admin_' + ADMIN_CREDENTIALS.username;
+    const token = authService.generateJWT(adminProfileId, ADMIN_CREDENTIALS.username, 'admin');
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        token,
+        user: {
+          username: ADMIN_CREDENTIALS.username,
+          role: 'admin'
+        },
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h'
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin login error:', error);
+    
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Login failed'
     });
   }
 });

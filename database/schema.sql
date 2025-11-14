@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS manufacturer_profiles (
   
   -- Verification Status
   is_verified BOOLEAN DEFAULT FALSE,
-  verification_status VARCHAR(20) DEFAULT 'pending' CHECK (verification_status IN ('pending', 'under_review', 'approved', 'rejected')),
+  verification_status VARCHAR(20) DEFAULT 'pending' CHECK (verification_status IN ('pending', 'Accepted', 'Rejected', 'Blocked')),
   
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

@@ -920,19 +920,6 @@ class DatabaseService {
     try {
       let query = supabase.from('buyer_profiles').select('*');
 
-      // Apply filters if provided
-      if (options.verified !== undefined) {
-        query = query.eq('is_verified', options.verified);
-      }
-
-      if (options.verification_status) {
-        query = query.eq('verification_status', options.verification_status);
-      }
-
-      if (options.onboarding_completed !== undefined) {
-        query = query.eq('onboarding_completed', options.onboarding_completed);
-      }
-
       // Apply sorting
       if (options.sortBy) {
         const ascending = options.sortOrder === 'asc';
@@ -1128,7 +1115,7 @@ class DatabaseService {
         .from('requirements')
         .select(`
           *,
-          buyer:buyer_profiles(id, full_name, company_name, phone_number, business_address)
+          buyer:buyer_profiles(id, full_name, phone_number, business_address)
         `);
 
       // Apply filters

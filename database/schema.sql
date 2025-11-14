@@ -35,26 +35,16 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 );
 
 -- Buyer profiles table - serves as both authentication and profile data storage
--- Profile fields are nullable until onboarding is completed
+-- Profile fields are nullable
 CREATE TABLE IF NOT EXISTS buyer_profiles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   phone_number VARCHAR(20) UNIQUE NOT NULL,
   
-  -- Basic Profile Information (nullable until onboarding is completed)
+  -- Basic Profile Information (nullable)
   full_name VARCHAR(255),
   email VARCHAR(255),
-  company_name VARCHAR(255),
-  gst_number VARCHAR(20),
   business_address TEXT,
   about_business TEXT,
-  
-  -- Onboarding Status
-  onboarding_completed BOOLEAN DEFAULT FALSE,
-  onboarding_completed_at TIMESTAMP WITH TIME ZONE,
-  
-  -- Verification Status
-  is_verified BOOLEAN DEFAULT FALSE,
-  verification_status VARCHAR(20) DEFAULT 'pending' CHECK (verification_status IN ('pending', 'under_review', 'approved', 'rejected')),
   
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -107,8 +97,6 @@ CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions(token_h
 
 -- Buyer profile indexes
 CREATE INDEX IF NOT EXISTS idx_buyer_profiles_phone_number ON buyer_profiles(phone_number);
-CREATE INDEX IF NOT EXISTS idx_buyer_profiles_onboarding_completed ON buyer_profiles(onboarding_completed);
-CREATE INDEX IF NOT EXISTS idx_buyer_profiles_verification_status ON buyer_profiles(verification_status);
 CREATE INDEX IF NOT EXISTS idx_buyer_profiles_email ON buyer_profiles(email);
 
 -- Manufacturer profile indexes
@@ -142,15 +130,7 @@ CREATE TRIGGER update_buyer_profiles_updated_at BEFORE UPDATE ON buyer_profiles
 CREATE TRIGGER update_manufacturer_profiles_updated_at BEFORE UPDATE ON manufacturer_profiles
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Constraints to ensure required fields are present when onboarding is completed
-
--- Buyer onboarding constraint
-ALTER TABLE buyer_profiles 
-  ADD CONSTRAINT check_buyer_onboarding_completed_fields 
-  CHECK (
-    (onboarding_completed = FALSE) OR 
-    (onboarding_completed = TRUE AND full_name IS NOT NULL AND email IS NOT NULL AND company_name IS NOT NULL)
-  );
+-- Constraints removed for buyer profiles (simplified structure)
 
 -- Manufacturer onboarding constraint
 ALTER TABLE manufacturer_profiles 
@@ -234,20 +214,7 @@ $$ LANGUAGE plpgsql;
 
 -- Onboarding helper functions
 
--- Function to mark buyer onboarding as completed
-CREATE OR REPLACE FUNCTION complete_buyer_onboarding(profile_id UUID)
-RETURNS BOOLEAN AS $$
-BEGIN
-  UPDATE buyer_profiles 
-  SET 
-    onboarding_completed = TRUE,
-    onboarding_completed_at = NOW(),
-    updated_at = NOW()
-  WHERE id = profile_id;
-  
-  RETURN FOUND;
-END;
-$$ LANGUAGE plpgsql;
+-- Function removed - buyer onboarding no longer tracked
 
 -- Function to mark manufacturer onboarding as completed
 CREATE OR REPLACE FUNCTION complete_manufacturer_onboarding(profile_id UUID)
@@ -264,27 +231,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get buyer onboarding status
-CREATE OR REPLACE FUNCTION get_buyer_onboarding_status(phone_num VARCHAR(20))
-RETURNS TABLE (
-  id UUID,
-  phone_number VARCHAR(20),
-  full_name VARCHAR(255),
-  onboarding_completed BOOLEAN,
-  onboarding_completed_at TIMESTAMP WITH TIME ZONE
-) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    bp.id,
-    bp.phone_number,
-    bp.full_name,
-    bp.onboarding_completed,
-    bp.onboarding_completed_at
-  FROM buyer_profiles bp
-  WHERE bp.phone_number = phone_num;
-END;
-$$ LANGUAGE plpgsql;
+-- Function removed - buyer onboarding no longer tracked
 
 -- Function to get manufacturer onboarding status
 CREATE OR REPLACE FUNCTION get_manufacturer_onboarding_status(phone_num VARCHAR(20))

@@ -12,11 +12,6 @@ router.get('/', async (req, res) => {
   try {
     // Extract query parameters
     const options = {
-      verified: req.query.verified !== undefined ? req.query.verified === 'true' : undefined,
-      verification_status: req.query.verification_status,
-      onboarding_completed: req.query.onboarding_completed !== undefined 
-        ? req.query.onboarding_completed === 'true' 
-        : undefined,
       sortBy: req.query.sortBy || 'created_at',
       sortOrder: req.query.sortOrder || 'desc',
       limit: req.query.limit ? parseInt(req.query.limit) : undefined,

@@ -151,7 +151,6 @@ class AuthService {
           // Create new buyer profile
           const profileData = {
             phone_number: phoneNumber,
-            is_verified: true,
             last_login: new Date().toISOString()
           };
           profile = await databaseService.createBuyerProfile(profileData);
@@ -159,10 +158,9 @@ class AuthService {
         } else {
           // Update existing buyer profile
           await databaseService.updateBuyerProfileByPhone(phoneNumber, {
-            is_verified: true,
             last_login: new Date().toISOString()
           });
-          console.log(`Existing buyer profile verified: ${phoneNumber}`);
+          console.log(`Existing buyer profile updated: ${phoneNumber}`);
         }
       } else if (role === 'manufacturer') {
         profile = await databaseService.findManufacturerProfileByPhone(phoneNumber);
@@ -207,7 +205,7 @@ class AuthService {
           id: profile.id,
           phoneNumber: profile.phone_number,
           role: role,
-          verified: profile.is_verified
+          verified: role === 'manufacturer' ? (profile.is_verified || false) : true
         }
       };
 
@@ -425,7 +423,6 @@ class AuthService {
     try {
       const profileData = {
         phone_number: phoneNumber,
-        is_verified: true,
         last_login: new Date().toISOString()
       };
       return await databaseService.createBuyerProfile(profileData);

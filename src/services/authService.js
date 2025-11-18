@@ -25,6 +25,20 @@ class AuthService {
   }
 
   /**
+   * Get daily OTP send count for a phone number
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<number>} Number of OTPs sent today
+   */
+  async getDailyOTPCount(phoneNumber) {
+    try {
+      return await databaseService.getDailyOTPCount(phoneNumber);
+    } catch (error) {
+      console.warn('Error getting daily OTP count:', error);
+      return 0;
+    }
+  }
+
+  /**
    * Send OTP via Twilio SMS
    * @param {string} phoneNumber - Phone number to send OTP to
    * @param {string} role - User role ('buyer' or 'manufacturer')
@@ -37,6 +51,12 @@ class AuthService {
         throw new Error('Invalid phone number format');
       }
 
+      // Check daily resend limit (max 3 per day)
+      const dailyCount = await this.getDailyOTPCount(phoneNumber);
+      if (dailyCount >= 3) {
+        throw new Error('You have reached the maximum of 3 OTP requests per day. Please try again tomorrow.');
+      }
+
       // Proactively expire any previous active OTPs for this phone
       try {
         await databaseService.expireActiveOtps(phoneNumber);
@@ -47,7 +67,7 @@ class AuthService {
 
       // Generate new OTP
       const otp = this.generateOTP();
-      const expiryTime = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRY_MINUTES) || 5) * 60 * 1000);
+      const expiryTime = new Date(Date.now() + (parseInt(process.env.OTP_EXPIRY_MINUTES) || 2) * 60 * 1000);
 
       // Store OTP in database
       const otpData = {
@@ -62,7 +82,7 @@ class AuthService {
 
       // Send SMS via Twilio
       const message = await twilioClient.messages.create({
-        body: `Your Grupo verification code is: ${otp}. This code expires in ${process.env.OTP_EXPIRY_MINUTES || 5} minutes.`,
+        body: `Your Grupo verification code is: ${otp}. This code expires in ${process.env.OTP_EXPIRY_MINUTES || 2} minutes.`,
         from: process.env.TWILIO_PHONE_NUMBER,
         to: phoneNumber
       });
@@ -73,7 +93,7 @@ class AuthService {
         success: true,
         message: 'OTP sent successfully',
         messageSid: message.sid,
-        expiresIn: process.env.OTP_EXPIRY_MINUTES || 5
+        expiresIn: process.env.OTP_EXPIRY_MINUTES || 2
       };
 
     } catch (error) {

@@ -692,6 +692,31 @@ class DatabaseService {
   }
 
   /**
+   * Get daily OTP send count for a phone number
+   * @param {string} phoneNumber - Phone number
+   * @returns {Promise<number>} Number of OTPs sent in the last 24 hours
+   */
+  async getDailyOTPCount(phoneNumber) {
+    try {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('otp_sessions')
+        .select('id')
+        .eq('phone_number', phoneNumber)
+        .gte('created_at', oneDayAgo);
+
+      if (error) {
+        throw new Error(`Failed to get daily OTP count: ${error.message}`);
+      }
+
+      return data ? data.length : 0;
+    } catch (error) {
+      console.error('DatabaseService.getDailyOTPCount error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Clean up expired OTPs
    * @returns {Promise<number>} Number of deleted OTPs
    */

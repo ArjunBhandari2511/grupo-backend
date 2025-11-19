@@ -134,7 +134,7 @@ class DatabaseService {
   /**
    * List messages for a conversation
    */
-  async listMessages(conversationId, { before, limit = 50 } = {}) {
+  async listMessages(conversationId, { before, limit = 50, requirementId = null } = {}) {
     try {
       let query = supabase
         .from('messages')
@@ -145,6 +145,11 @@ class DatabaseService {
 
       if (before) {
         query = query.lt('created_at', before);
+      }
+
+      // Filter by requirement_id if provided
+      if (requirementId) {
+        query = query.eq('requirement_id', requirementId);
       }
 
       const { data, error } = await query;
@@ -162,11 +167,23 @@ class DatabaseService {
   /**
    * Insert a new message and update conversation summary
    */
-  async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText) {
+  async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText, requirementId = null) {
     try {
+      const messageData = {
+        conversation_id: conversationId,
+        sender_role: senderRole,
+        sender_id: senderId,
+        body,
+        client_temp_id: clientTempId
+      };
+      
+      if (requirementId) {
+        messageData.requirement_id = requirementId;
+      }
+
       const { data, error } = await supabase
         .from('messages')
-        .insert([{ conversation_id: conversationId, sender_role: senderRole, sender_id: senderId, body, client_temp_id: clientTempId }])
+        .insert([messageData])
         .select('*')
         .single();
       if (error) {
@@ -259,10 +276,10 @@ class DatabaseService {
   /**
    * Get messages with attachments
    * @param {string} conversationId - Conversation ID
-   * @param {Object} options - Query options
+   * @param {Object} options - Query options (before, limit, requirementId)
    * @returns {Promise<Array>} Array of messages with attachments
    */
-  async listMessagesWithAttachments(conversationId, { before, limit = 50 } = {}) {
+  async listMessagesWithAttachments(conversationId, { before, limit = 50, requirementId = null } = {}) {
     try {
       let query = supabase
         .from('messages')
@@ -276,6 +293,11 @@ class DatabaseService {
 
       if (before) {
         query = query.lt('created_at', before);
+      }
+
+      // Filter by requirement_id if provided
+      if (requirementId) {
+        query = query.eq('requirement_id', requirementId);
       }
 
       const { data, error } = await query;
@@ -1409,6 +1431,60 @@ class DatabaseService {
       return data || [];
     } catch (error) {
       console.error('DatabaseService.getOrders error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get negotiating requirements for a specific conversation
+   * Returns requirements where status is 'negotiating' and matches the buyer_id and manufacturer_id
+   * @param {string} buyerId - Buyer ID from conversation
+   * @param {string} manufacturerId - Manufacturer ID from conversation
+   * @returns {Promise<Array>} Array of requirements with their details
+   */
+  async getNegotiatingRequirementsForConversation(buyerId, manufacturerId) {
+    try {
+      // First, get requirement_responses with status 'negotiating' for this manufacturer
+      const { data: responses, error: responsesError } = await supabase
+        .from('requirement_responses')
+        .select(`
+          requirement_id,
+          requirement:requirements(
+            id,
+            requirement_text,
+            quantity,
+            brand_name,
+            product_type,
+            product_link,
+            image_url,
+            notes,
+            created_at,
+            updated_at,
+            buyer_id
+          )
+        `)
+        .eq('status', 'negotiating')
+        .eq('manufacturer_id', manufacturerId);
+
+      if (responsesError) {
+        throw new Error(`Failed to fetch negotiating requirement responses: ${responsesError.message}`);
+      }
+
+      // Filter to only include requirements where buyer_id matches the conversation's buyer_id
+      const requirements = (responses || [])
+        .map(item => item.requirement)
+        .filter(req => req && req.buyer_id === buyerId);
+
+      // Sort by created_at descending (newest first)
+      requirements.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
+      });
+
+      return requirements;
+    } catch (error) {
+      console.error('DatabaseService.getNegotiatingRequirementsForConversation error:', error);
       throw error;
     }
   }

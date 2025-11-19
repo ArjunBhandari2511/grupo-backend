@@ -178,6 +178,57 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/requirements/conversation/:conversationId/negotiating
+ * @desc    Get negotiating requirements for a conversation (buyer_id and manufacturer_id match)
+ * @access  Private
+ * @note    This route MUST come before /:id to avoid route conflicts
+ */
+router.get('/conversation/:conversationId/negotiating', authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    // Get conversation to extract buyer_id and manufacturer_id
+    const conversation = await databaseService.getConversation(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+
+    // Verify user is a participant in this conversation
+    const { userId, role } = req.user;
+    if (!((role === 'buyer' && conversation.buyer_id === userId) || 
+          (role === 'manufacturer' && conversation.manufacturer_id === userId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view requirements for this conversation'
+      });
+    }
+
+    // Get negotiating requirements for this conversation
+    const requirements = await databaseService.getNegotiatingRequirementsForConversation(
+      conversation.buyer_id,
+      conversation.manufacturer_id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: requirements,
+      count: requirements.length
+    });
+  } catch (error) {
+    console.error('Get negotiating requirements error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch negotiating requirements',
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/requirements/:id
  * @desc    Get a single requirement by ID
  * @access  Private

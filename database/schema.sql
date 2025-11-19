@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_role VARCHAR(20) NOT NULL CHECK (sender_role IN ('buyer', 'manufacturer')),
   sender_id UUID NOT NULL,
   body TEXT NOT NULL,
+  requirement_id UUID REFERENCES requirements(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   is_read BOOLEAN DEFAULT FALSE,
   client_temp_id VARCHAR(64)
@@ -197,6 +198,7 @@ CREATE INDEX IF NOT EXISTS idx_conversations_last_message_at ON conversations(la
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages(is_read);
+CREATE INDEX IF NOT EXISTS idx_messages_requirement_id ON messages(requirement_id);
 
 CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
 

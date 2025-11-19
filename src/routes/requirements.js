@@ -383,12 +383,18 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
+    // Add 15% Grupo Fee to the quoted price
+    const GRUPO_FEE_PERCENTAGE = 0.15;
+    const baseQuotedPrice = parseFloat(quoted_price);
+    const quotedPriceWithFee = baseQuotedPrice * (1 + GRUPO_FEE_PERCENTAGE);
+    const pricePerUnitWithFee = parseFloat(price_per_unit) * (1 + GRUPO_FEE_PERCENTAGE);
+
     // Create response data
     const responseData = {
       requirement_id: requirementId,
       manufacturer_id: req.user.userId,
-      quoted_price: parseFloat(quoted_price),
-      price_per_unit: parseFloat(price_per_unit),
+      quoted_price: quotedPriceWithFee, // Store price with 15% fee included
+      price_per_unit: pricePerUnitWithFee, // Store price per unit with 15% fee included
       delivery_time: delivery_time.trim(),
       notes: notes ? notes.trim() : null,
       status: 'submitted'
@@ -518,10 +524,10 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
     const { status } = req.body;
 
     // Validate status
-    if (!status || !['accepted', 'rejected'].includes(status)) {
+    if (!status || !['accepted', 'rejected', 'negotiating'].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Status must be either "accepted" or "rejected"'
+        message: 'Status must be either "accepted", "rejected", or "negotiating"'
       });
     }
 

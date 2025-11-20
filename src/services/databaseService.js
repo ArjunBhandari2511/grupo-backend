@@ -1436,15 +1436,15 @@ class DatabaseService {
   }
 
   /**
-   * Get negotiating requirements for a specific conversation
-   * Returns requirements where status is 'negotiating' and matches the buyer_id and manufacturer_id
+   * Get negotiating and accepted requirements for a specific conversation
+   * Returns requirements where status is 'negotiating' or 'accepted' and matches the buyer_id and manufacturer_id
    * @param {string} buyerId - Buyer ID from conversation
    * @param {string} manufacturerId - Manufacturer ID from conversation
    * @returns {Promise<Array>} Array of requirements with their details
    */
   async getNegotiatingRequirementsForConversation(buyerId, manufacturerId) {
     try {
-      // First, get requirement_responses with status 'negotiating' for this manufacturer
+      // First, get requirement_responses with status 'negotiating' or 'accepted' for this manufacturer
       const { data: responses, error: responsesError } = await supabase
         .from('requirement_responses')
         .select(`
@@ -1463,11 +1463,11 @@ class DatabaseService {
             buyer_id
           )
         `)
-        .eq('status', 'negotiating')
+        .in('status', ['negotiating', 'accepted'])
         .eq('manufacturer_id', manufacturerId);
 
       if (responsesError) {
-        throw new Error(`Failed to fetch negotiating requirement responses: ${responsesError.message}`);
+        throw new Error(`Failed to fetch negotiating/accepted requirement responses: ${responsesError.message}`);
       }
 
       // Filter to only include requirements where buyer_id matches the conversation's buyer_id
@@ -1484,7 +1484,7 @@ class DatabaseService {
 
       return requirements;
     } catch (error) {
-      console.error('DatabaseService.getNegotiatingRequirementsForConversation error:', error);
+      console.error('DatabaseService.getNegotiatingRequirementsForConversation (negotiating/accepted) error:', error);
       throw error;
     }
   }

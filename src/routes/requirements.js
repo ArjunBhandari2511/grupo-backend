@@ -179,7 +179,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
 /**
  * @route   GET /api/requirements/conversation/:conversationId/negotiating
- * @desc    Get negotiating requirements for a conversation (buyer_id and manufacturer_id match)
+ * @desc    Get negotiating and accepted requirements for a conversation (buyer_id and manufacturer_id match)
  * @access  Private
  * @note    This route MUST come before /:id to avoid route conflicts
  */
@@ -207,7 +207,7 @@ router.get('/conversation/:conversationId/negotiating', authenticateToken, async
       });
     }
 
-    // Get negotiating requirements for this conversation
+    // Get negotiating and accepted requirements for this conversation
     const requirements = await databaseService.getNegotiatingRequirementsForConversation(
       conversation.buyer_id,
       conversation.manufacturer_id
@@ -219,10 +219,10 @@ router.get('/conversation/:conversationId/negotiating', authenticateToken, async
       count: requirements.length
     });
   } catch (error) {
-    console.error('Get negotiating requirements error:', error);
+    console.error('Get negotiating/accepted requirements error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch negotiating requirements',
+      message: 'Failed to fetch negotiating/accepted requirements',
       error: error.message
     });
   }

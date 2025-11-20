@@ -434,18 +434,12 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Add 15% Grupo Fee to the quoted price
-    const GRUPO_FEE_PERCENTAGE = 0.15;
-    const baseQuotedPrice = parseFloat(quoted_price);
-    const quotedPriceWithFee = baseQuotedPrice * (1 + GRUPO_FEE_PERCENTAGE);
-    const pricePerUnitWithFee = parseFloat(price_per_unit) * (1 + GRUPO_FEE_PERCENTAGE);
-
-    // Create response data
+    // Create response data (fees are calculated in frontend)
     const responseData = {
       requirement_id: requirementId,
       manufacturer_id: req.user.userId,
-      quoted_price: quotedPriceWithFee, // Store price with 15% fee included
-      price_per_unit: pricePerUnitWithFee, // Store price per unit with 15% fee included
+      quoted_price: parseFloat(quoted_price), // Store price as sent from frontend (includes fees)
+      price_per_unit: parseFloat(price_per_unit), // Store price per unit as sent from frontend
       delivery_time: delivery_time.trim(),
       notes: notes ? notes.trim() : null,
       status: 'submitted'

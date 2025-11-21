@@ -9,6 +9,7 @@ const { Server } = require('socket.io');
 const socketAuth = require('./middleware/wsAuth');
 const databaseService = require('./services/databaseService');
 const { buildMessageSummary } = require('./utils/messageSummary');
+const supabase = require('./config/supabase');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -188,7 +189,7 @@ io.on('connection', async (socket) => {
 
         let upTo = new Date().toISOString();
         if (upToMessageId) {
-          const { data: msg, error } = await require('./config/supabase')
+          const { data: msg, error } = await supabase
             .from('messages')
             .select('created_at')
             .eq('id', upToMessageId)

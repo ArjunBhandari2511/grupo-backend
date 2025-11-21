@@ -259,5 +259,3 @@ router.post('/conversations/:id/read', [
 });
 
 module.exports = router;
-
-

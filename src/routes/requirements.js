@@ -51,7 +51,7 @@ const authenticateAdmin = (req, res, next) => {
         };
         return next();
       }
-    } catch (jwtError) {
+    } catch {
       // JWT verification failed, continue to error
     }
     
@@ -688,4 +688,3 @@ router.get('/admin/orders', authenticateAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

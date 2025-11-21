@@ -38,60 +38,8 @@ const uploadToCloudinary = (fileBuffer, options = {}) => {
   });
 };
 
-/**
- * Delete file from Cloudinary
- * @param {string} publicId - Public ID of the file
- * @param {string} resourceType - Type of resource (image, video, raw)
- * @returns {Promise<Object>} - Deletion result
- */
-const deleteFromCloudinary = async (publicId, resourceType = 'auto') => {
-  try {
-    const result = await cloudinary.uploader.destroy(publicId, {
-      resource_type: resourceType
-    });
-    return result;
-  } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
-    throw error;
-  }
-};
-
-/**
- * Get optimized URL for an image
- * @param {string} publicId - Public ID of the image
- * @param {Object} options - Transformation options
- * @returns {string} - Optimized image URL
- */
-const getOptimizedImageUrl = (publicId, options = {}) => {
-  return cloudinary.url(publicId, {
-    fetch_format: 'auto',
-    quality: 'auto',
-    ...options
-  });
-};
-
-/**
- * Get optimized thumbnail URL
- * @param {string} publicId - Public ID of the image
- * @param {number} width - Thumbnail width
- * @param {number} height - Thumbnail height
- * @returns {string} - Thumbnail URL
- */
-const getThumbnailUrl = (publicId, width = 150, height = 150) => {
-  return cloudinary.url(publicId, {
-    width,
-    height,
-    crop: 'fill',
-    fetch_format: 'auto',
-    quality: 'auto'
-  });
-};
-
 module.exports = {
   cloudinary,
-  uploadToCloudinary,
-  deleteFromCloudinary,
-  getOptimizedImageUrl,
-  getThumbnailUrl
+  uploadToCloudinary
 };
 

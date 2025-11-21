@@ -312,34 +312,6 @@ class AuthService {
   }
 
   /**
-   * Verify JWT token and get user session
-   * @param {string} token - JWT token
-   * @returns {Promise<Object>} User session data
-   */
-  async verifyTokenAndGetSession(token) {
-    try {
-      // First verify JWT
-      const decoded = this.verifyJWT(token);
-      
-      // Then check database session
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const session = await databaseService.findUserSession(tokenHash);
-      
-      if (!session) {
-        throw new Error('Session not found or expired');
-      }
-      
-      return {
-        user: session.profile,
-        session: session
-      };
-    } catch (error) {
-      console.error('Error verifying token:', error);
-      throw new Error(`Token verification failed: ${error.message}`);
-    }
-  }
-
-  /**
    * Get profile by phone number and role
    * @param {string} phoneNumber - Phone number
    * @param {string} role - User role ('buyer' or 'manufacturer')
@@ -447,28 +419,6 @@ class AuthService {
       return await databaseService.updateManufacturerProfile(profileId, onboardingData);
     } catch (error) {
       console.error('Error submitting manufacturer onboarding:', error);
-      throw error;
-    }
-  }
-
-  async createBuyerProfile(phoneNumber) {
-    try {
-      const profileData = {
-        phone_number: phoneNumber,
-        last_login: new Date().toISOString()
-      };
-      return await databaseService.createBuyerProfile(profileData);
-    } catch (error) {
-      console.error('Error creating buyer profile:', error);
-      throw error;
-    }
-  }
-
-  async submitBuyerOnboarding(profileId, onboardingData) {
-    try {
-      return await databaseService.updateBuyerProfile(profileId, onboardingData);
-    } catch (error) {
-      console.error('Error submitting buyer onboarding:', error);
       throw error;
     }
   }

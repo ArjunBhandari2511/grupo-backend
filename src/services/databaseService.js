@@ -132,39 +132,6 @@ class DatabaseService {
   }
 
   /**
-   * List messages for a conversation
-   */
-  async listMessages(conversationId, { before, limit = 50, requirementId = null } = {}) {
-    try {
-      let query = supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (before) {
-        query = query.lt('created_at', before);
-      }
-
-      // Filter by requirement_id if provided
-      if (requirementId) {
-        query = query.eq('requirement_id', requirementId);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        throw new Error(`Failed to list messages: ${error.message}`);
-      }
-      // return in ascending chronological order for UI
-      return (data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-    } catch (error) {
-      console.error('DatabaseService.listMessages error:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Insert a new message and update conversation summary
    */
   async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText, requirementId = null) {
@@ -250,30 +217,6 @@ class DatabaseService {
   }
 
   /**
-   * Get message attachments
-   * @param {string} messageId - Message ID
-   * @returns {Promise<Array>} Array of attachments
-   */
-  async getMessageAttachments(messageId) {
-    try {
-      const { data, error } = await supabase
-        .from('message_attachments')
-        .select('*')
-        .eq('message_id', messageId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        throw new Error(`Failed to get attachments: ${error.message}`);
-      }
-
-      return data || [];
-    } catch (error) {
-      console.error('DatabaseService.getMessageAttachments error:', error);
-      throw error;
-    }
-  }
-
-  /**
    * Get messages with attachments
    * @param {string} conversationId - Conversation ID
    * @param {Object} options - Query options (before, limit, requirementId)
@@ -334,29 +277,6 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Mark messages as read up to a specific message id (resolves its timestamp)
-   */
-  async markReadByMessageId(conversationId, readerUserId, role, upToMessageId) {
-    try {
-      let upTo = new Date().toISOString();
-      if (upToMessageId) {
-        const { data: msg, error: msgErr } = await supabase
-          .from('messages')
-          .select('created_at, conversation_id')
-          .eq('id', upToMessageId)
-          .single();
-        if (!msgErr && msg && msg.conversation_id === conversationId) {
-          upTo = msg.created_at;
-        }
-      }
-
-      return await this.markRead(conversationId, readerUserId, upTo);
-    } catch (error) {
-      console.error('DatabaseService.markReadByMessageId error:', error);
-      throw error;
-    }
-  }
   /**
    * Create a new buyer profile
    * @param {Object} profileData - Buyer profile data
@@ -1584,35 +1504,6 @@ class DatabaseService {
     }
   }
 
-  /**
-   * Get all accepted orders (requirements with accepted responses)
-   * @param {Object} options - Query options (sorting, pagination)
-   * @returns {Promise<Array>} Array of accepted orders with buyer and manufacturer info
-   * @deprecated Use getOrders({ status: 'accepted' }) instead
-   */
-  async getAcceptedOrders(options = {}) {
-    return this.getOrders({ ...options, status: 'accepted' });
-  }
-
-  /**
-   * Get all rejected orders (requirements with rejected responses)
-   * @param {Object} options - Query options (sorting, pagination)
-   * @returns {Promise<Array>} Array of rejected orders with buyer and manufacturer info
-   * @deprecated Use getOrders({ status: 'rejected' }) instead
-   */
-  async getRejectedOrders(options = {}) {
-    return this.getOrders({ ...options, status: 'rejected' });
-  }
-
-  /**
-   * Get all pending orders (requirements with submitted/pending responses)
-   * @param {Object} options - Query options (sorting, pagination)
-   * @returns {Promise<Array>} Array of pending orders with buyer and manufacturer info
-   * @deprecated Use getOrders({ status: 'submitted' }) instead
-   */
-  async getPendingOrders(options = {}) {
-    return this.getOrders({ ...options, status: 'submitted' });
-  }
 }
 
 module.exports = new DatabaseService();

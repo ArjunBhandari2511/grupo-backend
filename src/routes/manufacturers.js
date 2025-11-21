@@ -52,7 +52,7 @@ const authenticateAdmin = (req, res, next) => {
         };
         return next();
       }
-    } catch (jwtError) {
+    } catch {
       // JWT verification failed, continue to error
     }
     

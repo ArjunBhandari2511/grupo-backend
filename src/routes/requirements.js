@@ -178,6 +178,38 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/requirements/buyer/statistics
+ * @desc    Get requirement statistics for the authenticated buyer
+ * @access  Private (Buyer only)
+ * @note    This route MUST come before /:id to avoid route conflicts
+ */
+router.get('/buyer/statistics', authenticateToken, async (req, res) => {
+  try {
+    // Ensure user is a buyer
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only buyers can access requirement statistics'
+      });
+    }
+
+    const statistics = await databaseService.getBuyerRequirementStatistics(req.user.userId);
+
+    return res.status(200).json({
+      success: true,
+      data: statistics
+    });
+  } catch (error) {
+    console.error('Get buyer requirement statistics error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch requirement statistics',
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/requirements/conversation/:conversationId/negotiating
  * @desc    Get negotiating and accepted requirements for a conversation (buyer_id and manufacturer_id match)
  * @access  Private

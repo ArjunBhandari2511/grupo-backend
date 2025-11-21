@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS requirement_responses (
   price_per_unit DECIMAL(10, 2) NOT NULL,
   delivery_time VARCHAR(255) NOT NULL,
   notes TEXT,
-  status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected')),
+  status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'negotiating')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT uq_requirement_manufacturer UNIQUE (requirement_id, manufacturer_id)

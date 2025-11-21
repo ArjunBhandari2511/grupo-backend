@@ -1147,6 +1147,101 @@ class DatabaseService {
   }
 
   /**
+   * Get buyer requirement statistics
+   * @param {string} buyerId - Buyer ID
+   * @returns {Promise<Object>} Statistics object with total, accepted, pending_review, in_negotiation counts
+   */
+  async getBuyerRequirementStatistics(buyerId) {
+    try {
+      // Get total requirements count
+      const { count: totalCount, error: totalError } = await supabase
+        .from('requirements')
+        .select('id', { count: 'exact', head: true })
+        .eq('buyer_id', buyerId);
+
+      if (totalError) {
+        throw new Error(`Failed to fetch total requirements: ${totalError.message}`);
+      }
+
+      // Get all requirements for this buyer
+      const { data: requirements, error: requirementsError } = await supabase
+        .from('requirements')
+        .select('id')
+        .eq('buyer_id', buyerId);
+
+      if (requirementsError) {
+        throw new Error(`Failed to fetch requirements: ${requirementsError.message}`);
+      }
+
+      const requirementIds = (requirements || []).map(r => r.id);
+
+      if (requirementIds.length === 0) {
+        return {
+          total: 0,
+          accepted: 0,
+          pending_review: 0,
+          in_negotiation: 0
+        };
+      }
+
+      // Get all responses for these requirements
+      const { data: responses, error: responsesError } = await supabase
+        .from('requirement_responses')
+        .select('requirement_id, status')
+        .in('requirement_id', requirementIds);
+
+      if (responsesError) {
+        throw new Error(`Failed to fetch responses: ${responsesError.message}`);
+      }
+
+      // Group responses by requirement_id
+      const requirementResponseMap = new Map();
+      (responses || []).forEach(response => {
+        if (!requirementResponseMap.has(response.requirement_id)) {
+          requirementResponseMap.set(response.requirement_id, []);
+        }
+        requirementResponseMap.get(response.requirement_id).push(response.status);
+      });
+
+      // Calculate statistics
+      let accepted = 0;
+      let in_negotiation = 0;
+      let pending_review = 0;
+
+      requirementIds.forEach(requirementId => {
+        const responseStatuses = requirementResponseMap.get(requirementId) || [];
+        
+        if (responseStatuses.length === 0) {
+          // No responses = pending review
+          pending_review++;
+        } else {
+          // Check if any response is accepted
+          if (responseStatuses.includes('accepted')) {
+            accepted++;
+          }
+          // Check if any response is negotiating
+          else if (responseStatuses.includes('negotiating')) {
+            in_negotiation++;
+          } else {
+            // Has responses but none are accepted or negotiating = pending review
+            pending_review++;
+          }
+        }
+      });
+
+      return {
+        total: totalCount || 0,
+        accepted,
+        pending_review,
+        in_negotiation
+      };
+    } catch (error) {
+      console.error('DatabaseService.getBuyerRequirementStatistics error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all requirements (for manufacturers to view)
    * @param {Object} options - Query options (filters, sorting, pagination)
    * @returns {Promise<Array>} Array of requirements with buyer info

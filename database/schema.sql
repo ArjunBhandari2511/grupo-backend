@@ -308,3 +308,33 @@ CREATE TRIGGER update_requirements_updated_at BEFORE UPDATE ON requirements
 -- Trigger for requirement_responses updated_at
 CREATE TRIGGER update_requirement_responses_updated_at BEFORE UPDATE ON requirement_responses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- Designs Schema
+-- =============================================
+
+-- Designs table - manufacturers can upload their designs
+CREATE TABLE IF NOT EXISTS designs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  manufacturer_id UUID NOT NULL REFERENCES manufacturer_profiles(id) ON DELETE CASCADE,
+  product_name VARCHAR(255) NOT NULL,
+  product_category VARCHAR(100) NOT NULL,
+  image_url TEXT NOT NULL,
+  price_1_50 DECIMAL(10, 2),
+  price_51_100 DECIMAL(10, 2),
+  price_101_200 DECIMAL(10, 2),
+  tags TEXT[] DEFAULT '{}',
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for designs table
+CREATE INDEX IF NOT EXISTS idx_designs_manufacturer_id ON designs(manufacturer_id);
+CREATE INDEX IF NOT EXISTS idx_designs_product_category ON designs(product_category);
+CREATE INDEX IF NOT EXISTS idx_designs_is_active ON designs(is_active);
+CREATE INDEX IF NOT EXISTS idx_designs_created_at ON designs(created_at);
+
+-- Trigger for designs updated_at
+CREATE TRIGGER update_designs_updated_at BEFORE UPDATE ON designs
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

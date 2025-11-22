@@ -18,6 +18,7 @@ const buyerRoutes = require('./routes/buyers');
 const chatRoutes = require('./routes/chat');
 const uploadRoutes = require('./routes/upload');
 const requirementsRoutes = require('./routes/requirements');
+const designsRoutes = require('./routes/designs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,6 +60,7 @@ app.use('/api/buyers', buyerRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/requirements', requirementsRoutes);
+app.use('/api/designs', designsRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -73,6 +75,7 @@ app.get('/', (req, res) => {
       buyers: '/api/buyers',
       chat: '/api/chat',
       requirements: '/api/requirements',
+      designs: '/api/designs',
       upload: '/api/upload',
       health: '/health'
     }

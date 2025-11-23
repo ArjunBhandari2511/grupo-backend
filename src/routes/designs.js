@@ -8,6 +8,39 @@ const { uploadToCloudinary } = require('../config/cloudinary');
 
 const router = express.Router();
 
+// Commission rate (10%)
+const COMMISSION_RATE = 0.1;
+
+/**
+ * Add commission to design prices for buyers
+ * Manufacturers see original prices, buyers see prices with 10% commission
+ * Prices are rounded to whole numbers (no decimals) for buyers
+ */
+const addCommissionToPrices = (design, isBuyer) => {
+  if (!isBuyer) {
+    // Manufacturers see original prices
+    return design;
+  }
+
+  // Buyers see prices with 10% commission added, rounded to whole numbers
+  const designWithCommission = { ...design };
+  
+  if (design.price_1_50) {
+    const priceWithCommission = design.price_1_50 * (1 + COMMISSION_RATE);
+    designWithCommission.price_1_50 = Math.round(priceWithCommission);
+  }
+  if (design.price_51_100) {
+    const priceWithCommission = design.price_51_100 * (1 + COMMISSION_RATE);
+    designWithCommission.price_51_100 = Math.round(priceWithCommission);
+  }
+  if (design.price_101_200) {
+    const priceWithCommission = design.price_101_200 * (1 + COMMISSION_RATE);
+    designWithCommission.price_101_200 = Math.round(priceWithCommission);
+  }
+
+  return designWithCommission;
+};
+
 // Configure multer for design image uploads
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -210,10 +243,14 @@ router.get('/', authenticateToken, async (req, res) => {
       throw new Error(`Failed to fetch designs: ${error.message}`);
     }
 
+    // Add commission to prices for buyers
+    const isBuyer = role === 'buyer';
+    const designsWithCommission = (data || []).map(design => addCommissionToPrices(design, isBuyer));
+
     res.status(200).json({
       success: true,
       message: 'Designs retrieved successfully',
-      data: { designs: data || [] }
+      data: { designs: designsWithCommission }
     });
   } catch (error) {
     console.error('Get designs error:', error);
@@ -259,10 +296,14 @@ router.get('/:id', authenticateToken, async (req, res) => {
       throw new Error(`Failed to fetch design: ${error.message}`);
     }
 
+    // Add commission to prices for buyers
+    const isBuyer = req.user.role === 'buyer';
+    const designWithCommission = addCommissionToPrices(data, isBuyer);
+
     res.status(200).json({
       success: true,
       message: 'Design retrieved successfully',
-      data: { design: data }
+      data: { design: designWithCommission }
     });
   } catch (error) {
     console.error('Get design error:', error);

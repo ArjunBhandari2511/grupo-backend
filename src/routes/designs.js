@@ -415,21 +415,23 @@ router.put('/:id',
 /**
  * @route   DELETE /api/designs/:id
  * @desc    Delete a design (soft delete by setting is_active to false)
- * @access  Private (Manufacturer only, own designs)
+ * @access  Private (Manufacturer for own designs, Admin for any design)
  */
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
-    if (req.user.role !== 'manufacturer') {
+    const { role, userId } = req.user;
+    
+    // Only manufacturers and admins can delete designs
+    if (role !== 'manufacturer' && role !== 'admin') {
       return res.status(403).json({
         success: false,
-        message: 'Only manufacturers can delete designs'
+        message: 'Only manufacturers and admins can delete designs'
       });
     }
 
     const { id } = req.params;
-    const { userId } = req.user;
 
-    // Check if design exists and belongs to manufacturer
+    // Check if design exists
     const { data: existingDesign, error: fetchError } = await supabase
       .from('designs')
       .select('manufacturer_id')
@@ -443,7 +445,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    if (existingDesign.manufacturer_id !== userId) {
+    // Manufacturers can only delete their own designs, admins can delete any design
+    if (role === 'manufacturer' && existingDesign.manufacturer_id !== userId) {
       return res.status(403).json({
         success: false,
         message: 'You can only delete your own designs'

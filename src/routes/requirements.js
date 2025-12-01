@@ -286,9 +286,16 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Include buyer details
+    const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
+    const enrichedRequirement = {
+      ...requirement,
+      buyer: buyer || null
+    };
+
     return res.status(200).json({
       success: true,
-      data: requirement
+      data: enrichedRequirement
     });
   } catch (error) {
     console.error('Get requirement error:', error);
@@ -583,6 +590,77 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/requirements/responses/:responseId
+ * @desc    Get a single requirement response by ID
+ * @access  Private (Buyer or Manufacturer who owns the requirement/response)
+ */
+router.get('/responses/:responseId', authenticateToken, async (req, res) => {
+  try {
+    const { responseId } = req.params;
+
+    // Get the response
+    const response = await databaseService.getRequirementResponseById(responseId);
+    
+    if (!response) {
+      return res.status(404).json({
+        success: false,
+        message: 'Response not found'
+      });
+    }
+
+    // Get the requirement to verify ownership
+    const requirement = await databaseService.getRequirement(response.requirement_id);
+    
+    if (!requirement) {
+      return res.status(404).json({
+        success: false,
+        message: 'Requirement not found'
+      });
+    }
+
+    // Verify user has permission to view this response
+    if (req.user.role === 'buyer' && requirement.buyer_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view this response'
+      });
+    }
+
+    if (req.user.role === 'manufacturer' && response.manufacturer_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view this response'
+      });
+    }
+
+    // Enrich response with requirement and manufacturer details
+    const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
+    const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
+
+    const enrichedResponse = {
+      ...response,
+      requirement: {
+        ...requirement,
+        buyer: buyer || null
+      },
+      manufacturer: manufacturer || null
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: enrichedResponse
+    });
+  } catch (error) {
+    console.error('Get requirement response error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch response',
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   PATCH /api/requirements/responses/:responseId/status
  * @desc    Update response status (accept/reject) - Buyer only
  * @access  Private (Buyer only)
@@ -628,10 +706,16 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
+    // Generate invoice number when status is accepted
+    let updateData = { status };
+    if (status === 'accepted') {
+      const invoiceNumber = `RFI-${responseId.slice(-6).toUpperCase()}`;
+      updateData.invoice_number = invoiceNumber;
+      updateData.accepted_at = new Date().toISOString();
+    }
+
     // Update response status
-    const updatedResponse = await databaseService.updateRequirementResponse(responseId, {
-      status
-    });
+    const updatedResponse = await databaseService.updateRequirementResponse(responseId, updateData);
 
     return res.status(200).json({
       success: true,

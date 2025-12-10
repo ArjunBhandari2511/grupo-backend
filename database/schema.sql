@@ -380,7 +380,6 @@ CREATE TABLE IF NOT EXISTS ai_designs (
   design_description TEXT,
   image_url TEXT NOT NULL,
   quantity INTEGER NOT NULL,
-  price_per_unit DECIMAL(10, 2) NOT NULL,
   preferred_colors TEXT,
   print_placement VARCHAR(255),
   status VARCHAR(20) DEFAULT 'published' CHECK (status IN ('published', 'draft', 'archived')),

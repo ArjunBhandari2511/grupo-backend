@@ -23,7 +23,6 @@ router.post('/', authenticateToken, async (req, res) => {
       apparel_type,
       design_description,
       quantity,
-      price_per_unit,
       preferred_colors,
       print_placement,
       status
@@ -51,13 +50,6 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    if (!price_per_unit || price_per_unit <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Price per unit must be greater than 0'
-      });
-    }
-
     // Create AI design data
     const aiDesignData = {
       buyer_id: req.user.userId,
@@ -65,7 +57,6 @@ router.post('/', authenticateToken, async (req, res) => {
       apparel_type: apparel_type.trim(),
       design_description: design_description ? design_description.trim() : null,
       quantity: parseInt(quantity),
-      price_per_unit: parseFloat(price_per_unit),
       preferred_colors: preferred_colors ? preferred_colors.trim() : null,
       print_placement: print_placement ? print_placement.trim() : null,
       status: status || 'published'

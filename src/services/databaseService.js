@@ -1970,7 +1970,7 @@ class DatabaseService {
           // Get AI design details
           const { data: aiDesign } = await supabase
             .from('ai_designs')
-            .select('id, apparel_type, design_description, image_url, quantity, price_per_unit')
+            .select('id, apparel_type, design_description, image_url, quantity')
             .eq('id', response.ai_design_id)
             .single();
 

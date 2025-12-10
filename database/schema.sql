@@ -397,3 +397,30 @@ CREATE INDEX IF NOT EXISTS idx_ai_designs_apparel_type ON ai_designs(apparel_typ
 -- Trigger for AI designs updated_at
 CREATE TRIGGER update_ai_designs_updated_at BEFORE UPDATE ON ai_designs
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- AI Design Responses Schema
+-- =============================================
+
+-- AI Design Responses table - manufacturers respond to AI designs
+CREATE TABLE IF NOT EXISTS ai_design_responses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  ai_design_id UUID NOT NULL REFERENCES ai_designs(id) ON DELETE CASCADE,
+  manufacturer_id UUID NOT NULL REFERENCES manufacturer_profiles(id) ON DELETE CASCADE,
+  price_per_unit DECIMAL(10, 2) NOT NULL,
+  quantity INTEGER NOT NULL,
+  status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'negotiating')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  CONSTRAINT uq_ai_design_manufacturer UNIQUE (ai_design_id, manufacturer_id)
+);
+
+-- Indexes for AI design responses table
+CREATE INDEX IF NOT EXISTS idx_ai_design_responses_ai_design_id ON ai_design_responses(ai_design_id);
+CREATE INDEX IF NOT EXISTS idx_ai_design_responses_manufacturer_id ON ai_design_responses(manufacturer_id);
+CREATE INDEX IF NOT EXISTS idx_ai_design_responses_status ON ai_design_responses(status);
+CREATE INDEX IF NOT EXISTS idx_ai_design_responses_created_at ON ai_design_responses(created_at);
+
+-- Trigger for AI design responses updated_at
+CREATE TRIGGER update_ai_design_responses_updated_at BEFORE UPDATE ON ai_design_responses
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

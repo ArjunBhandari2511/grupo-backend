@@ -1870,6 +1870,132 @@ class DatabaseService {
     }
   }
 
+  // =============================================
+  // AI DESIGN RESPONSES METHODS
+  // =============================================
+
+  /**
+   * Create an AI design response (manufacturer responds to an AI design)
+   * @param {Object} responseData - Response data
+   * @returns {Promise<Object>} Created response
+   */
+  async createAIDesignResponse(responseData) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_design_responses')
+        .insert([responseData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create AI design response: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.createAIDesignResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get responses for a specific AI design
+   * @param {string} aiDesignId - AI Design ID
+   * @returns {Promise<Array>} Array of responses
+   */
+  async getAIDesignResponses(aiDesignId) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_design_responses')
+        .select(`
+          *,
+          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+        `)
+        .eq('ai_design_id', aiDesignId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(`Failed to fetch AI design responses: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getAIDesignResponses error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all AI design responses for a buyer (responses to their AI designs)
+   * @param {string} buyerId - Buyer ID
+   * @returns {Promise<Array>} Array of responses
+   */
+  async getBuyerAIDesignResponses(buyerId) {
+    try {
+      // First, get all AI designs for this buyer
+      const { data: aiDesigns, error: designsError } = await supabase
+        .from('ai_designs')
+        .select('id')
+        .eq('buyer_id', buyerId);
+
+      if (designsError) {
+        throw new Error(`Failed to fetch buyer AI designs: ${designsError.message}`);
+      }
+
+      if (!aiDesigns || aiDesigns.length === 0) {
+        return [];
+      }
+
+      const aiDesignIds = aiDesigns.map(d => d.id);
+
+      // Then get all responses for these AI designs
+      // Note: We fetch responses first, then enrich with design and manufacturer data
+      const { data: responses, error: responsesError } = await supabase
+        .from('ai_design_responses')
+        .select('*')
+        .in('ai_design_id', aiDesignIds)
+        .order('created_at', { ascending: false });
+
+      if (responsesError) {
+        throw new Error(`Failed to fetch buyer AI design responses: ${responsesError.message}`);
+      }
+
+      if (!responses || responses.length === 0) {
+        return [];
+      }
+
+      // Enrich responses with design and manufacturer data
+      const enrichedResponses = await Promise.all(
+        responses.map(async (response) => {
+          // Get AI design details
+          const { data: aiDesign } = await supabase
+            .from('ai_designs')
+            .select('id, apparel_type, design_description, image_url, quantity, price_per_unit')
+            .eq('id', response.ai_design_id)
+            .single();
+
+          // Get manufacturer details
+          const { data: manufacturer } = await supabase
+            .from('manufacturer_profiles')
+            .select('id, unit_name, location, business_type')
+            .eq('id', response.manufacturer_id)
+            .single();
+
+          return {
+            ...response,
+            ai_design: aiDesign || null,
+            manufacturer: manufacturer || null
+          };
+        })
+      );
+
+      return enrichedResponses;
+    } catch (error) {
+      console.error('DatabaseService.getBuyerAIDesignResponses error:', error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = new DatabaseService();

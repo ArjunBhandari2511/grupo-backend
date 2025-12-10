@@ -367,3 +367,33 @@ CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 -- Trigger for orders updated_at
 CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON orders
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- AI Designs Schema
+-- =============================================
+
+-- AI Designs table - buyers publish AI-generated designs to manufacturers
+CREATE TABLE IF NOT EXISTS ai_designs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  buyer_id UUID NOT NULL REFERENCES buyer_profiles(id) ON DELETE CASCADE,
+  apparel_type VARCHAR(255) NOT NULL,
+  design_description TEXT,
+  image_url TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  price_per_unit DECIMAL(10, 2) NOT NULL,
+  preferred_colors TEXT,
+  print_placement VARCHAR(255),
+  status VARCHAR(20) DEFAULT 'published' CHECK (status IN ('published', 'draft', 'archived')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for AI designs table
+CREATE INDEX IF NOT EXISTS idx_ai_designs_buyer_id ON ai_designs(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_ai_designs_status ON ai_designs(status);
+CREATE INDEX IF NOT EXISTS idx_ai_designs_created_at ON ai_designs(created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_designs_apparel_type ON ai_designs(apparel_type);
+
+-- Trigger for AI designs updated_at
+CREATE TRIGGER update_ai_designs_updated_at BEFORE UPDATE ON ai_designs
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

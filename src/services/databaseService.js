@@ -1706,6 +1706,170 @@ class DatabaseService {
     }
   }
 
+  // =============================================
+  // AI DESIGNS METHODS
+  // =============================================
+
+  /**
+   * Create a new AI design
+   * @param {Object} aiDesignData - AI design data
+   * @returns {Promise<Object>} Created AI design
+   */
+  async createAIDesign(aiDesignData) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_designs')
+        .insert([aiDesignData])
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create AI design: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.createAIDesign error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get AI designs for a buyer
+   * @param {string} buyerId - Buyer profile ID
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of AI designs
+   */
+  async getBuyerAIDesigns(buyerId, options = {}) {
+    try {
+      let query = supabase
+        .from('ai_designs')
+        .select('*')
+        .eq('buyer_id', buyerId);
+
+      // Apply status filter
+      if (options.status) {
+        query = query.eq('status', options.status);
+      }
+
+      // Apply apparel type filter
+      if (options.apparel_type) {
+        query = query.eq('apparel_type', options.apparel_type);
+      }
+
+      // Apply sorting
+      query = query.order('created_at', { ascending: false });
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 50) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch buyer AI designs: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getBuyerAIDesigns error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all published AI designs (for manufacturers)
+   * @param {Object} options - Query options (filters, sorting, pagination)
+   * @returns {Promise<Array>} Array of AI designs
+   */
+  async getAllAIDesigns(options = {}) {
+    try {
+      let query = supabase
+        .from('ai_designs')
+        .select('*')
+        .eq('status', 'published'); // Only show published designs to manufacturers
+
+      // Apply apparel type filter
+      if (options.apparel_type) {
+        query = query.eq('apparel_type', options.apparel_type);
+      }
+
+      // Apply sorting
+      query = query.order('created_at', { ascending: false });
+
+      // Apply pagination
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 50) - 1);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(`Failed to fetch AI designs: ${error.message}`);
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error('DatabaseService.getAllAIDesigns error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single AI design by ID
+   * @param {string} id - AI design ID
+   * @returns {Promise<Object|null>} AI design or null if not found
+   */
+  async getAIDesign(id) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_designs')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null; // Not found
+        }
+        throw new Error(`Failed to fetch AI design: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.getAIDesign error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete an AI design
+   * @param {string} id - AI design ID
+   * @returns {Promise<void>}
+   */
+  async deleteAIDesign(id) {
+    try {
+      const { error } = await supabase
+        .from('ai_designs')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(`Failed to delete AI design: ${error.message}`);
+      }
+    } catch (error) {
+      console.error('DatabaseService.deleteAIDesign error:', error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = new DatabaseService();

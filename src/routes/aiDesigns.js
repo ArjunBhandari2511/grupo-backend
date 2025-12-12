@@ -100,8 +100,11 @@ router.get('/', authenticateToken, async (req, res) => {
     let aiDesigns;
 
     if (req.user.role === 'buyer') {
-      // Buyers can only see their own AI designs
-      aiDesigns = await databaseService.getBuyerAIDesigns(req.user.userId, options);
+      // Buyers can see all their AI designs (draft and published)
+      // Remove status filter for buyers to show all their designs
+      const buyerOptions = { ...options };
+      delete buyerOptions.status;
+      aiDesigns = await databaseService.getBuyerAIDesigns(req.user.userId, buyerOptions);
     } else if (req.user.role === 'manufacturer') {
       // Manufacturers can see all published AI designs
       aiDesigns = await databaseService.getAllAIDesigns(options);
@@ -173,6 +176,59 @@ router.get('/:id', authenticateToken, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch AI design',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   PATCH /api/ai-designs/:id/push
+ * @desc    Push an AI design to manufacturers (change status to published)
+ * @access  Private (Buyer can push their own designs)
+ */
+router.patch('/:id/push', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Ensure user is a buyer
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only buyers can push AI designs to manufacturers'
+      });
+    }
+
+    // Get the existing AI design
+    const existingAIDesign = await databaseService.getAIDesign(id);
+
+    if (!existingAIDesign) {
+      return res.status(404).json({
+        success: false,
+        message: 'AI design not found'
+      });
+    }
+
+    // Only the buyer who created it can push
+    if (existingAIDesign.buyer_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to push this AI design'
+      });
+    }
+
+    // Update status to published
+    const updatedDesign = await databaseService.updateAIDesign(id, { status: 'published' });
+
+    return res.status(200).json({
+      success: true,
+      message: 'AI design pushed to manufacturers successfully',
+      data: updatedDesign
+    });
+  } catch (error) {
+    console.error('Push AI design error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to push AI design',
       error: error.message
     });
   }

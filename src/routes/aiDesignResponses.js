@@ -181,5 +181,75 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * @route   PATCH /api/ai-design-responses/:id/status
+ * @desc    Update AI design response status (accept/reject)
+ * @access  Private (Buyer can accept/reject responses to their designs)
+ */
+router.patch('/:id/status', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    // Validate status
+    if (!status || !['accepted', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be either "accepted" or "rejected"'
+      });
+    }
+
+    // Ensure user is a buyer
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only buyers can accept or reject AI design responses'
+      });
+    }
+
+    // Get the existing response
+    const existingResponse = await databaseService.getAIDesignResponse(id);
+    if (!existingResponse) {
+      return res.status(404).json({
+        success: false,
+        message: 'AI design response not found'
+      });
+    }
+
+    // Get the AI design to verify ownership
+    const aiDesign = await databaseService.getAIDesign(existingResponse.ai_design_id);
+    if (!aiDesign) {
+      return res.status(404).json({
+        success: false,
+        message: 'AI design not found'
+      });
+    }
+
+    // Only the buyer who owns the AI design can accept/reject responses
+    if (aiDesign.buyer_id !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this response'
+      });
+    }
+
+    // Update response status
+    const updatedResponse = await databaseService.updateAIDesignResponse(id, { status });
+
+    return res.status(200).json({
+      success: true,
+      message: `Response ${status} successfully`,
+      data: updatedResponse
+    });
+  } catch (error) {
+    console.error('Update AI design response status error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update response status',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
 

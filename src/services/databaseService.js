@@ -1856,6 +1856,32 @@ class DatabaseService {
   }
 
   /**
+   * Update an AI design
+   * @param {string} id - AI design ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated AI design
+   */
+  async updateAIDesign(id, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_designs')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update AI design: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.updateAIDesign error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete an AI design
    * @param {string} id - AI design ID
    * @returns {Promise<void>}
@@ -1900,6 +1926,59 @@ class DatabaseService {
       return data;
     } catch (error) {
       console.error('DatabaseService.createAIDesignResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single AI design response by ID
+   * @param {string} responseId - AI design response ID
+   * @returns {Promise<Object|null>} AI design response or null if not found
+   */
+  async getAIDesignResponse(responseId) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_design_responses')
+        .select('*')
+        .eq('id', responseId)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return null; // Not found
+        }
+        throw new Error(`Failed to fetch AI design response: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.getAIDesignResponse error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update an AI design response
+   * @param {string} responseId - AI design response ID
+   * @param {Object} updateData - Data to update
+   * @returns {Promise<Object>} Updated AI design response
+   */
+  async updateAIDesignResponse(responseId, updateData) {
+    try {
+      const { data, error } = await supabase
+        .from('ai_design_responses')
+        .update(updateData)
+        .eq('id', responseId)
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to update AI design response: ${error.message}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('DatabaseService.updateAIDesignResponse error:', error);
       throw error;
     }
   }

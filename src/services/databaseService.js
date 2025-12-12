@@ -1788,9 +1788,15 @@ class DatabaseService {
    */
   async getAllAIDesigns(options = {}) {
     try {
+      // Build select query - include buyer info if requested
+      const includeBuyer = options.includeBuyer !== false; // Default to true
+      const selectQuery = includeBuyer
+        ? '*, buyer:buyer_profiles(id, full_name, phone_number)'
+        : '*';
+
       let query = supabase
         .from('ai_designs')
-        .select('*')
+        .select(selectQuery)
         .eq('status', 'published'); // Only show published designs to manufacturers
 
       // Apply apparel type filter

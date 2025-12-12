@@ -105,6 +105,10 @@ router.get('/', authenticateToken, async (req, res) => {
     } else if (req.user.role === 'manufacturer') {
       // Manufacturers can see all published AI designs
       aiDesigns = await databaseService.getAllAIDesigns(options);
+    } else if (req.user.role === 'admin') {
+      // Admins can see all published AI designs with buyer information
+      options.includeBuyer = true;
+      aiDesigns = await databaseService.getAllAIDesigns(options);
     } else {
       return res.status(403).json({
         success: false,

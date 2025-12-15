@@ -18,8 +18,6 @@ const buyerRoutes = require('./routes/buyers');
 const chatRoutes = require('./routes/chat');
 const uploadRoutes = require('./routes/upload');
 const requirementsRoutes = require('./routes/requirements');
-const designsRoutes = require('./routes/designs');
-const ordersRoutes = require('./routes/orders');
 const aiDesignsRoutes = require('./routes/aiDesigns');
 const aiDesignResponsesRoutes = require('./routes/aiDesignResponses');
 
@@ -63,8 +61,6 @@ app.use('/api/buyers', buyerRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/requirements', requirementsRoutes);
-app.use('/api/designs', designsRoutes);
-app.use('/api/orders', ordersRoutes);
 app.use('/api/ai-designs', aiDesignsRoutes);
 app.use('/api/ai-design-responses', aiDesignResponsesRoutes);
 
@@ -81,8 +77,6 @@ app.get('/', (req, res) => {
       buyers: '/api/buyers',
       chat: '/api/chat',
       requirements: '/api/requirements',
-      designs: '/api/designs',
-      orders: '/api/orders',
       aiDesigns: '/api/ai-designs',
       aiDesignResponses: '/api/ai-design-responses',
       upload: '/api/upload',

@@ -288,6 +288,8 @@ CREATE TABLE IF NOT EXISTS requirement_responses (
   delivery_time VARCHAR(255) NOT NULL,
   notes TEXT,
   status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'negotiating')),
+  invoice_number VARCHAR(50),
+  accepted_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   CONSTRAINT uq_requirement_manufacturer UNIQUE (requirement_id, manufacturer_id)
@@ -350,6 +352,9 @@ CREATE TABLE IF NOT EXISTS ai_design_responses (
   manufacturer_id UUID NOT NULL REFERENCES manufacturer_profiles(id) ON DELETE CASCADE,
   price_per_unit DECIMAL(10, 2) NOT NULL,
   quantity INTEGER NOT NULL,
+  gst DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  platform_fee DECIMAL(10, 2) NOT NULL DEFAULT 0,
+  quoted_price DECIMAL(10, 2) NOT NULL,
   status VARCHAR(20) DEFAULT 'submitted' CHECK (status IN ('submitted', 'accepted', 'rejected', 'negotiating')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

@@ -73,12 +73,53 @@ router.post('/', authenticateToken, async (req, res) => {
       console.warn('Could not check existing responses, proceeding with insert:', checkError.message);
     }
 
+    // Calculate price breakdown
+    const pricePerUnit = parseFloat(price_per_unit);
+    const qty = parseInt(quantity);
+    const basePrice = pricePerUnit * qty;
+    const gst = basePrice * 0.05; // 5% GST
+    
+    // Calculate platform fee using tiered structure (same as requirements)
+    // Tiered structure:
+    // 0 to 1 Lakh (0-100000) → 20%
+    // 1 Lakh to 2 Lakh (100001-200000) → 15%
+    // 2 Lakh to 5 Lakh (200001-500000) → 8%
+    // Above 5 Lakh (500001+) → 5%
+    let platformFeeRate = 0.15; // Default
+    let platformFee = basePrice * platformFeeRate;
+    
+    // Iterate to converge on correct fee (since fee depends on total)
+    for (let i = 0; i < 5; i++) {
+      const total = basePrice + gst + platformFee;
+      
+      if (total <= 100000) {
+        platformFeeRate = 0.20; // 20%
+      } else if (total <= 200000) {
+        platformFeeRate = 0.15; // 15%
+      } else if (total <= 500000) {
+        platformFeeRate = 0.08; // 8%
+      } else {
+        platformFeeRate = 0.05; // 5%
+      }
+      
+      const newPlatformFee = basePrice * platformFeeRate;
+      if (Math.abs(newPlatformFee - platformFee) < 0.01) {
+        break;
+      }
+      platformFee = newPlatformFee;
+    }
+    
+    const quotedPrice = basePrice + gst + platformFee;
+
     // Create response data
     const responseData = {
       ai_design_id,
       manufacturer_id: req.user.userId,
-      price_per_unit: parseFloat(price_per_unit),
-      quantity: parseInt(quantity),
+      price_per_unit: pricePerUnit,
+      quantity: qty,
+      gst: parseFloat(gst.toFixed(2)),
+      platform_fee: parseFloat(platformFee.toFixed(2)),
+      quoted_price: parseFloat(quotedPrice.toFixed(2)),
       status: 'submitted'
     };
 

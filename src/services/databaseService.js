@@ -1404,6 +1404,7 @@ class DatabaseService {
           *,
           requirement:requirements(
             id,
+            requirement_no,
             requirement_text,
             quantity,
             brand_name,
@@ -1466,6 +1467,7 @@ class DatabaseService {
           requirement_id,
           requirement:requirements(
             id,
+            requirement_no,
             requirement_text,
             quantity,
             brand_name,

@@ -267,6 +267,7 @@ $$ LANGUAGE plpgsql;
 CREATE TABLE IF NOT EXISTS requirements (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   buyer_id UUID NOT NULL REFERENCES buyer_profiles(id) ON DELETE CASCADE,
+  requirement_no VARCHAR(50) UNIQUE NOT NULL,
   requirement_text TEXT NOT NULL,
   quantity INTEGER,
   brand_name VARCHAR(255),
@@ -298,10 +299,41 @@ CREATE TABLE IF NOT EXISTS requirement_responses (
 -- Indexes for requirements tables
 CREATE INDEX IF NOT EXISTS idx_requirements_buyer_id ON requirements(buyer_id);
 CREATE INDEX IF NOT EXISTS idx_requirements_created_at ON requirements(created_at);
+CREATE INDEX IF NOT EXISTS idx_requirements_requirement_no ON requirements(requirement_no);
 
 CREATE INDEX IF NOT EXISTS idx_requirement_responses_requirement_id ON requirement_responses(requirement_id);
 CREATE INDEX IF NOT EXISTS idx_requirement_responses_manufacturer_id ON requirement_responses(manufacturer_id);
 CREATE INDEX IF NOT EXISTS idx_requirement_responses_status ON requirement_responses(status);
+
+-- Function to generate next requirement number
+CREATE OR REPLACE FUNCTION generate_requirement_no()
+RETURNS TRIGGER AS $$
+DECLARE
+  next_num INTEGER;
+  formatted_no VARCHAR(50);
+BEGIN
+  -- Get the highest requirement number
+  SELECT COALESCE(MAX(CAST(SUBSTRING(requirement_no FROM '(\d+)$') AS INTEGER)), 0) + 1
+  INTO next_num
+  FROM requirements
+  WHERE requirement_no LIKE 'GROUPO-REQ-%';
+  
+  -- Format as GROUPO-REQ-0001, GROUPO-REQ-0002, etc.
+  formatted_no := 'GROUPO-REQ-' || LPAD(next_num::TEXT, 4, '0');
+  
+  -- Set the requirement number
+  NEW.requirement_no := formatted_no;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-generate requirement number before insert
+CREATE TRIGGER generate_requirement_no_trigger
+  BEFORE INSERT ON requirements
+  FOR EACH ROW
+  WHEN (NEW.requirement_no IS NULL)
+  EXECUTE FUNCTION generate_requirement_no();
 
 -- Trigger for requirements updated_at
 CREATE TRIGGER update_requirements_updated_at BEFORE UPDATE ON requirements

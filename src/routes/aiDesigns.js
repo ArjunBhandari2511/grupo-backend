@@ -2,11 +2,25 @@ const express = require('express');
 const router = express.Router();
 const databaseService = require('../services/databaseService');
 const { authenticateToken } = require('../middleware/auth');
+const { uploadBase64Image } = require('../config/cloudinary');
+
+/**
+ * Helper function to check if a string is a base64 image
+ * @param {string} str - String to check
+ * @returns {boolean} - True if string is base64 image
+ */
+const isBase64Image = (str) => {
+  if (!str || typeof str !== 'string') return false;
+  // Check if it's a data URI or pure base64
+  return str.startsWith('data:image/') || 
+         (str.length > 100 && /^[A-Za-z0-9+/=]+$/.test(str.replace(/\s/g, '')));
+};
 
 /**
  * @route   POST /api/ai-designs
  * @desc    Create a new AI-generated design
  * @access  Private (Buyer only)
+ * @note    Automatically uploads base64 images to Cloudinary
  */
 router.post('/', authenticateToken, async (req, res) => {
   try {
@@ -50,16 +64,47 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
+    let finalImageUrl = image_url.trim();
+
+    // Check if image_url is a base64 image and upload to Cloudinary
+    if (isBase64Image(image_url)) {
+      try {
+        console.log('Uploading base64 image to Cloudinary...');
+        const uploadResult = await uploadBase64Image(image_url, {
+          folder: `groupo-ai-designs/${req.user.userId}`,
+          context: {
+            buyer_id: req.user.userId,
+            apparel_type: apparel_type.trim(),
+            uploaded_via: 'ai-design-generation'
+          },
+          tags: ['ai-design', 'generated', apparel_type.toLowerCase().replace(/\s+/g, '-')]
+        });
+        
+        finalImageUrl = uploadResult.url;
+        console.log('Image uploaded to Cloudinary:', uploadResult.url);
+      } catch (uploadError) {
+        console.error('Failed to upload image to Cloudinary:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload image to Cloudinary',
+          error: uploadError.message
+        });
+      }
+    } else {
+      // If it's already a URL (Cloudinary or external), use it as-is
+      console.log('Using provided image URL (not base64)');
+    }
+
     // Create AI design data
     const aiDesignData = {
       buyer_id: req.user.userId,
-      image_url: image_url.trim(),
+      image_url: finalImageUrl,
       apparel_type: apparel_type.trim(),
       design_description: design_description ? design_description.trim() : null,
       quantity: parseInt(quantity),
       preferred_colors: preferred_colors ? preferred_colors.trim() : null,
       print_placement: print_placement ? print_placement.trim() : null,
-      status: status || 'published'
+      status: status || 'draft'
     };
 
     // Create AI design in database
@@ -85,10 +130,11 @@ router.post('/', authenticateToken, async (req, res) => {
  * @desc    Get AI designs
  * @access  Private
  * @note    Buyers see their own designs, Manufacturers see all published designs
+ * @query   include_responses - Optional: 'true' to include responses (optimizes N+1 queries)
  */
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { limit, offset, status, apparel_type } = req.query;
+    const { limit, offset, status, apparel_type, include_responses } = req.query;
 
     const options = {
       limit: limit ? parseInt(limit) : 50,
@@ -117,6 +163,18 @@ router.get('/', authenticateToken, async (req, res) => {
         success: false,
         message: 'Invalid user role'
       });
+    }
+
+    // If include_responses is true, batch fetch all responses to avoid N+1 queries
+    if (include_responses === 'true' && aiDesigns.length > 0) {
+      const designIds = aiDesigns.map(design => design.id);
+      const responsesMap = await databaseService.getAIDesignResponsesBatch(designIds);
+      
+      // Attach responses to each design
+      aiDesigns = aiDesigns.map(design => ({
+        ...design,
+        responses: responsesMap.get(design.id) || []
+      }));
     }
 
     return res.status(200).json({

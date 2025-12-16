@@ -242,5 +242,62 @@ router.post('/multiple', authenticateToken, upload.array('files', 5), async (req
   }
 });
 
+/**
+ * POST /upload/ai-design-image
+ * Upload a base64 AI design image to Cloudinary
+ * @access  Private (Buyer only)
+ */
+router.post('/ai-design-image', authenticateToken, async (req, res) => {
+  try {
+    // Ensure user is a buyer
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only buyers can upload AI design images'
+      });
+    }
+
+    const { image_base64, apparel_type } = req.body;
+
+    if (!image_base64 || image_base64.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Base64 image data is required'
+      });
+    }
+
+    const { uploadBase64Image } = require('../config/cloudinary');
+
+    // Upload to Cloudinary
+    const uploadResult = await uploadBase64Image(image_base64, {
+      folder: `groupo-ai-designs/${req.user.userId}`,
+      context: {
+        buyer_id: req.user.userId,
+        apparel_type: apparel_type || 'unknown',
+        uploaded_via: 'ai-design-upload-endpoint'
+      },
+      tags: ['ai-design', 'uploaded', apparel_type ? apparel_type.toLowerCase().replace(/\s+/g, '-') : 'unknown']
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        url: uploadResult.url,
+        public_id: uploadResult.public_id,
+        width: uploadResult.width,
+        height: uploadResult.height,
+        format: uploadResult.format,
+        bytes: uploadResult.bytes
+      }
+    });
+  } catch (error) {
+    console.error('AI design image upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to upload AI design image'
+    });
+  }
+});
+
 module.exports = router;
 

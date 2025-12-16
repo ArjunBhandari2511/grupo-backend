@@ -2022,6 +2022,54 @@ class DatabaseService {
   }
 
   /**
+   * Batch fetch responses for multiple AI designs (optimizes N+1 queries)
+   * @param {Array<string>} aiDesignIds - Array of AI Design IDs
+   * @returns {Promise<Map<string, Array>>} Map of design ID to responses array
+   */
+  async getAIDesignResponsesBatch(aiDesignIds) {
+    try {
+      if (!aiDesignIds || aiDesignIds.length === 0) {
+        return new Map();
+      }
+
+      const { data, error } = await supabase
+        .from('ai_design_responses')
+        .select(`
+          *,
+          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+        `)
+        .in('ai_design_id', aiDesignIds)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(`Failed to batch fetch AI design responses: ${error.message}`);
+      }
+
+      // Group responses by ai_design_id
+      const responsesMap = new Map();
+      (data || []).forEach((response) => {
+        const designId = response.ai_design_id;
+        if (!responsesMap.has(designId)) {
+          responsesMap.set(designId, []);
+        }
+        responsesMap.get(designId).push(response);
+      });
+
+      // Ensure all design IDs have an entry (even if empty)
+      aiDesignIds.forEach((id) => {
+        if (!responsesMap.has(id)) {
+          responsesMap.set(id, []);
+        }
+      });
+
+      return responsesMap;
+    } catch (error) {
+      console.error('DatabaseService.getAIDesignResponsesBatch error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all AI design responses for a buyer (responses to their AI designs)
    * @param {string} buyerId - Buyer ID
    * @returns {Promise<Array>} Array of responses

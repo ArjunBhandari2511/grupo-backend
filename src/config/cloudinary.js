@@ -38,8 +38,60 @@ const uploadToCloudinary = (fileBuffer, options = {}) => {
   });
 };
 
+/**
+ * Upload base64 image to Cloudinary
+ * @param {string} base64Image - Base64 image string (can include data URI prefix)
+ * @param {Object} options - Upload options
+ * @returns {Promise<Object>} - Cloudinary upload result with secure_url
+ */
+const uploadBase64Image = async (base64Image, options = {}) => {
+  try {
+    // Remove data URI prefix if present (e.g., "data:image/png;base64,")
+    let base64Data = base64Image;
+    if (base64Image.includes(',')) {
+      base64Data = base64Image.split(',')[1];
+    }
+
+    const uploadOptions = {
+      folder: options.folder || 'groupo-ai-designs',
+      resource_type: 'image',
+      // Optimize images automatically
+      transformation: [
+        { quality: 'auto', fetch_format: 'auto' },
+        ...(options.transformation || [])
+      ],
+      // Add context and tags
+      context: {
+        ...options.context,
+        uploaded_at: new Date().toISOString()
+      },
+      tags: ['ai-design', ...(options.tags || [])],
+      ...options
+    };
+
+    const result = await cloudinary.uploader.upload(
+      `data:image/png;base64,${base64Data}`,
+      uploadOptions
+    );
+
+    return {
+      url: result.secure_url,
+      public_id: result.public_id,
+      width: result.width,
+      height: result.height,
+      format: result.format,
+      bytes: result.bytes,
+      ...result
+    };
+  } catch (error) {
+    console.error('Cloudinary base64 upload error:', error);
+    throw new Error(`Failed to upload image to Cloudinary: ${error.message}`);
+  }
+};
+
 module.exports = {
   cloudinary,
-  uploadToCloudinary
+  uploadToCloudinary,
+  uploadBase64Image
 };
 

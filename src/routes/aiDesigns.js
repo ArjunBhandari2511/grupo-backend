@@ -135,6 +135,57 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/ai-designs/conversation/:conversationId/accepted
+ * @desc    Get accepted AI designs for a conversation (buyer_id and manufacturer_id match)
+ * @access  Private
+ * @note    This route MUST come before /:id to avoid route conflicts
+ */
+router.get('/conversation/:conversationId/accepted', authenticateToken, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    // Get conversation to extract buyer_id and manufacturer_id
+    const conversation = await databaseService.getConversation(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Conversation not found'
+      });
+    }
+
+    // Verify user is a participant in this conversation
+    const { userId, role } = req.user;
+    if (!((role === 'buyer' && conversation.buyer_id === userId) || 
+          (role === 'manufacturer' && conversation.manufacturer_id === userId))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view AI designs for this conversation'
+      });
+    }
+
+    // Get accepted AI designs for this conversation
+    const aiDesigns = await databaseService.getAcceptedAIDesignsForConversation(
+      conversation.buyer_id,
+      conversation.manufacturer_id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: aiDesigns,
+      count: aiDesigns.length
+    });
+  } catch (error) {
+    console.error('Get accepted AI designs error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch accepted AI designs',
+      error: error.message
+    });
+  }
+});
+
+/**
  * @route   GET /api/ai-designs/:id
  * @desc    Get a single AI design by ID
  * @access  Private

@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS messages (
   sender_id UUID NOT NULL,
   body TEXT NOT NULL,
   requirement_id UUID REFERENCES requirements(id) ON DELETE SET NULL,
+  ai_design_id UUID REFERENCES ai_designs(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   is_read BOOLEAN DEFAULT FALSE,
   client_temp_id VARCHAR(64)
@@ -199,6 +200,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages(is_read);
 CREATE INDEX IF NOT EXISTS idx_messages_requirement_id ON messages(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_messages_ai_design_id ON messages(ai_design_id);
 
 CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
 
@@ -352,6 +354,7 @@ CREATE TRIGGER update_requirement_responses_updated_at BEFORE UPDATE ON requirem
 CREATE TABLE IF NOT EXISTS ai_designs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   buyer_id UUID NOT NULL REFERENCES buyer_profiles(id) ON DELETE CASCADE,
+  design_no VARCHAR(50) UNIQUE NOT NULL,
   apparel_type VARCHAR(255) NOT NULL,
   design_description TEXT,
   image_url TEXT NOT NULL,
@@ -368,6 +371,37 @@ CREATE INDEX IF NOT EXISTS idx_ai_designs_buyer_id ON ai_designs(buyer_id);
 CREATE INDEX IF NOT EXISTS idx_ai_designs_status ON ai_designs(status);
 CREATE INDEX IF NOT EXISTS idx_ai_designs_created_at ON ai_designs(created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_designs_apparel_type ON ai_designs(apparel_type);
+CREATE INDEX IF NOT EXISTS idx_ai_designs_design_no ON ai_designs(design_no);
+
+-- Function to auto-generate design number (GROUPO-AI-0001, GROUPO-AI-0002, etc.)
+CREATE OR REPLACE FUNCTION generate_design_no()
+RETURNS TRIGGER AS $$
+DECLARE
+  next_num INTEGER;
+  formatted_no VARCHAR(50);
+BEGIN
+  -- Get the highest design number
+  SELECT COALESCE(MAX(CAST(SUBSTRING(design_no FROM '(\d+)$') AS INTEGER)), 0) + 1
+  INTO next_num
+  FROM ai_designs
+  WHERE design_no LIKE 'GROUPO-AI-%';
+  
+  -- Format as GROUPO-AI-0001, GROUPO-AI-0002, etc.
+  formatted_no := 'GROUPO-AI-' || LPAD(next_num::TEXT, 4, '0');
+  
+  -- Set the design number
+  NEW.design_no := formatted_no;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-generate design number before insert
+CREATE TRIGGER generate_design_no_trigger
+  BEFORE INSERT ON ai_designs
+  FOR EACH ROW
+  WHEN (NEW.design_no IS NULL)
+  EXECUTE FUNCTION generate_design_no();
 
 -- Trigger for AI designs updated_at
 CREATE TRIGGER update_ai_designs_updated_at BEFORE UPDATE ON ai_designs

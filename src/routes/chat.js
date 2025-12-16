@@ -142,12 +142,53 @@ router.get('/conversations/:id/messages/requirement/:requirementId', [
   }
 });
 
+// GET /conversations/:id/messages/ai-design/:aiDesignId → get messages for a specific AI design in a conversation
+router.get('/conversations/:id/messages/ai-design/:aiDesignId', [
+  param('id').isUUID().withMessage('conversation id must be a valid UUID'),
+  param('aiDesignId').isUUID().withMessage('aiDesignId must be a valid UUID'),
+  query('before').optional().isISO8601().withMessage('before must be an ISO timestamp'),
+  query('limit').optional().isInt({ min: 1, max: 200 }).withMessage('limit must be between 1 and 200')
+], authenticateToken, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: errors.array() });
+    }
+
+    const conversationId = req.params.id;
+    const aiDesignId = req.params.aiDesignId;
+    const before = req.query.before;
+    const limit = parseInt(req.query.limit || '200', 10);
+
+    const convo = await databaseService.getConversation(conversationId);
+
+    // Auth: must be participant
+    const { userId, role } = req.user;
+    if (!convo || !((role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId))) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this conversation' });
+    }
+
+    // Get messages filtered by both conversation_id AND ai_design_id
+    const messages = await databaseService.listMessagesWithAttachments(conversationId, { before, limit, aiDesignId });
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: { messages },
+      count: messages.length 
+    });
+  } catch (error) {
+    console.error('List messages by AI design error:', error);
+    return res.status(400).json({ success: false, message: error.message || 'Failed to list messages' });
+  }
+});
+
 // GET /conversations/:id/messages → paginate history
 router.get('/conversations/:id/messages', [
   param('id').isUUID().withMessage('conversation id must be a valid UUID'),
   query('before').optional().isISO8601().withMessage('before must be an ISO timestamp'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('limit must be between 1 and 100'),
-  query('requirementId').optional().isUUID().withMessage('requirementId must be a valid UUID')
+  query('requirementId').optional().isUUID().withMessage('requirementId must be a valid UUID'),
+  query('aiDesignId').optional().isUUID().withMessage('aiDesignId must be a valid UUID')
 ], authenticateToken, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -159,6 +200,7 @@ router.get('/conversations/:id/messages', [
     const before = req.query.before;
     const limit = parseInt(req.query.limit || '50', 10);
     const requirementId = req.query.requirementId || null;
+    const aiDesignId = req.query.aiDesignId || null;
 
     const convo = await databaseService.getConversation(conversationId);
 
@@ -169,7 +211,7 @@ router.get('/conversations/:id/messages', [
     }
 
     // Get messages with attachments
-    const messages = await databaseService.listMessagesWithAttachments(conversationId, { before, limit, requirementId });
+    const messages = await databaseService.listMessagesWithAttachments(conversationId, { before, limit, requirementId, aiDesignId });
     res.status(200).json({ success: true, data: { messages } });
   } catch (error) {
     console.error('List messages error:', error);
@@ -183,7 +225,8 @@ router.post('/conversations/:id/messages', [
   body('body').optional().isString().isLength({ max: 4000 }).withMessage('body must be at most 4000 characters'),
   body('clientTempId').optional().isString().isLength({ max: 64 }),
   body('attachments').optional().isArray().withMessage('attachments must be an array'),
-  body('requirementId').optional().isUUID().withMessage('requirementId must be a valid UUID')
+  body('requirementId').optional().isUUID().withMessage('requirementId must be a valid UUID'),
+  body('aiDesignId').optional().isUUID().withMessage('aiDesignId must be a valid UUID')
 ], authenticateToken, async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -209,7 +252,8 @@ router.post('/conversations/:id/messages', [
     const cleanBody = hasBody ? sanitizeBody(req.body.body) : '';
     const summaryText = buildMessageSummary(cleanBody, hasAttachments ? req.body.attachments : []);
     const requirementId = req.body.requirementId || null;
-    const message = await databaseService.insertMessage(conversationId, role, userId, cleanBody, req.body.clientTempId || null, summaryText, requirementId);
+    const aiDesignId = req.body.aiDesignId || null;
+    const message = await databaseService.insertMessage(conversationId, role, userId, cleanBody, req.body.clientTempId || null, summaryText, requirementId, aiDesignId);
 
     // Insert attachments if any
     let attachments = [];

@@ -134,7 +134,7 @@ class DatabaseService {
   /**
    * Insert a new message and update conversation summary
    */
-  async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText, requirementId = null) {
+  async insertMessage(conversationId, senderRole, senderId, body, clientTempId, summaryText, requirementId = null, aiDesignId = null) {
     try {
       const messageData = {
         conversation_id: conversationId,
@@ -146,6 +146,10 @@ class DatabaseService {
       
       if (requirementId) {
         messageData.requirement_id = requirementId;
+      }
+      
+      if (aiDesignId) {
+        messageData.ai_design_id = aiDesignId;
       }
 
       const { data, error } = await supabase
@@ -222,7 +226,7 @@ class DatabaseService {
    * @param {Object} options - Query options (before, limit, requirementId)
    * @returns {Promise<Array>} Array of messages with attachments
    */
-  async listMessagesWithAttachments(conversationId, { before, limit = 50, requirementId = null } = {}) {
+  async listMessagesWithAttachments(conversationId, { before, limit = 50, requirementId = null, aiDesignId = null } = {}) {
     try {
       let query = supabase
         .from('messages')
@@ -241,6 +245,11 @@ class DatabaseService {
       // Filter by requirement_id if provided
       if (requirementId) {
         query = query.eq('requirement_id', requirementId);
+      }
+      
+      // Filter by ai_design_id if provided
+      if (aiDesignId) {
+        query = query.eq('ai_design_id', aiDesignId);
       }
 
       const { data, error } = await query;
@@ -2079,6 +2088,61 @@ class DatabaseService {
       return enrichedResponses;
     } catch (error) {
       console.error('DatabaseService.getBuyerAIDesignResponses error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get accepted AI designs for a conversation (buyer_id and manufacturer_id match)
+   * Returns AI designs where responses have status 'accepted' for this buyer and manufacturer
+   * @param {string} buyerId - Buyer ID
+   * @param {string} manufacturerId - Manufacturer ID
+   * @returns {Promise<Array>} Array of AI designs
+   */
+  async getAcceptedAIDesignsForConversation(buyerId, manufacturerId) {
+    try {
+      // First, get ai_design_responses with status 'accepted' for this manufacturer
+      const { data: responses, error: responsesError } = await supabase
+        .from('ai_design_responses')
+        .select(`
+          ai_design_id,
+          ai_design:ai_designs(
+            id,
+            buyer_id,
+            design_no,
+            apparel_type,
+            design_description,
+            image_url,
+            quantity,
+            preferred_colors,
+            print_placement,
+            status,
+            created_at,
+            updated_at
+          )
+        `)
+        .eq('status', 'accepted')
+        .eq('manufacturer_id', manufacturerId);
+
+      if (responsesError) {
+        throw new Error(`Failed to fetch accepted AI design responses: ${responsesError.message}`);
+      }
+
+      // Filter to only include AI designs where buyer_id matches the conversation's buyer_id
+      const aiDesigns = (responses || [])
+        .map(item => item.ai_design)
+        .filter(design => design && design.buyer_id === buyerId);
+
+      // Sort by created_at descending (newest first)
+      aiDesigns.sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA;
+      });
+
+      return aiDesigns;
+    } catch (error) {
+      console.error('DatabaseService.getAcceptedAIDesignsForConversation error:', error);
       throw error;
     }
   }

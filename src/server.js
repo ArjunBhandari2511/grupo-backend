@@ -136,7 +136,7 @@ io.on('connection', async (socket) => {
     });
 
     // message:send
-    socket.on('message:send', async ({ conversationId, body, clientTempId, attachments, requirementId }) => {
+    socket.on('message:send', async ({ conversationId, body, clientTempId, attachments, requirementId, aiDesignId }) => {
       try {
         if (!conversationId) return;
         
@@ -153,7 +153,7 @@ io.on('connection', async (socket) => {
 
         const sanitized = hasBody ? (typeof body === 'string' ? body.replace(/<[^>]*>/g, '') : '').slice(0, 4000) : '';
         const summaryText = buildMessageSummary(sanitized, hasAttachments ? attachments : []);
-        const message = await databaseService.insertMessage(conversationId, role, userId, sanitized, clientTempId || null, summaryText, requirementId || null);
+        const message = await databaseService.insertMessage(conversationId, role, userId, sanitized, clientTempId || null, summaryText, requirementId || null, aiDesignId || null);
 
         // Insert attachments if any
         let messageAttachments = [];

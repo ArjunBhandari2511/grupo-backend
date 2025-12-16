@@ -313,15 +313,26 @@ RETURNS TRIGGER AS $$
 DECLARE
   next_num INTEGER;
   formatted_no VARCHAR(50);
+  max_new_format INTEGER;
+  max_old_format INTEGER;
 BEGIN
-  -- Get the highest requirement number
-  SELECT COALESCE(MAX(CAST(SUBSTRING(requirement_no FROM '(\d+)$') AS INTEGER)), 0) + 1
-  INTO next_num
+  -- Get the highest requirement number from new format (GRUPO-RFQ-*)
+  SELECT COALESCE(MAX(CAST(SUBSTRING(requirement_no FROM '(\d+)$') AS INTEGER)), 0)
+  INTO max_new_format
+  FROM requirements
+  WHERE requirement_no LIKE 'GRUPO-RFQ-%';
+  
+  -- Get the highest requirement number from old format (GROUPO-REQ-*) for transition
+  SELECT COALESCE(MAX(CAST(SUBSTRING(requirement_no FROM '(\d+)$') AS INTEGER)), 0)
+  INTO max_old_format
   FROM requirements
   WHERE requirement_no LIKE 'GROUPO-REQ-%';
   
-  -- Format as GROUPO-REQ-0001, GROUPO-REQ-0002, etc.
-  formatted_no := 'GROUPO-REQ-' || LPAD(next_num::TEXT, 4, '0');
+  -- Use the maximum of both formats to ensure no sequence gaps
+  next_num := GREATEST(max_new_format, max_old_format) + 1;
+  
+  -- Format as GRUPO-RFQ-0001, GRUPO-RFQ-0002, etc.
+  formatted_no := 'GRUPO-RFQ-' || LPAD(next_num::TEXT, 4, '0');
   
   -- Set the requirement number
   NEW.requirement_no := formatted_no;
@@ -373,21 +384,32 @@ CREATE INDEX IF NOT EXISTS idx_ai_designs_created_at ON ai_designs(created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_designs_apparel_type ON ai_designs(apparel_type);
 CREATE INDEX IF NOT EXISTS idx_ai_designs_design_no ON ai_designs(design_no);
 
--- Function to auto-generate design number (GROUPO-AI-0001, GROUPO-AI-0002, etc.)
+-- Function to auto-generate design number (GRUPO-AI-0001, GRUPO-AI-0002, etc.)
 CREATE OR REPLACE FUNCTION generate_design_no()
 RETURNS TRIGGER AS $$
 DECLARE
   next_num INTEGER;
   formatted_no VARCHAR(50);
+  max_new_format INTEGER;
+  max_old_format INTEGER;
 BEGIN
-  -- Get the highest design number
-  SELECT COALESCE(MAX(CAST(SUBSTRING(design_no FROM '(\d+)$') AS INTEGER)), 0) + 1
-  INTO next_num
+  -- Get the highest design number from new format (GRUPO-AI-*)
+  SELECT COALESCE(MAX(CAST(SUBSTRING(design_no FROM '(\d+)$') AS INTEGER)), 0)
+  INTO max_new_format
+  FROM ai_designs
+  WHERE design_no LIKE 'GRUPO-AI-%';
+  
+  -- Get the highest design number from old format (GROUPO-AI-*) for transition
+  SELECT COALESCE(MAX(CAST(SUBSTRING(design_no FROM '(\d+)$') AS INTEGER)), 0)
+  INTO max_old_format
   FROM ai_designs
   WHERE design_no LIKE 'GROUPO-AI-%';
   
-  -- Format as GROUPO-AI-0001, GROUPO-AI-0002, etc.
-  formatted_no := 'GROUPO-AI-' || LPAD(next_num::TEXT, 4, '0');
+  -- Use the maximum of both formats to ensure no sequence gaps
+  next_num := GREATEST(max_new_format, max_old_format) + 1;
+  
+  -- Format as GRUPO-AI-0001, GRUPO-AI-0002, etc.
+  formatted_no := 'GRUPO-AI-' || LPAD(next_num::TEXT, 4, '0');
   
   -- Set the design number
   NEW.design_no := formatted_no;

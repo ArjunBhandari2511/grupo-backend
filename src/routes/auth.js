@@ -262,6 +262,7 @@ router.post('/manufacturer-onboarding', [
   body('product_types').optional().isArray().withMessage('Product types must be an array'),
   body('capacity').optional().isInt({ min: 0 }).withMessage('Capacity must be a positive integer'),
   body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters'),
+  body('manufacturing_unit_image_url').optional().isURL().withMessage('Manufacturing unit image URL must be a valid URL'),
   body('msme_file').optional(),
   body('other_certificates').optional()
 ], async (req, res) => {
@@ -305,6 +306,7 @@ router.post('/manufacturer-onboarding', [
       product_types: req.body.product_types || [],
       daily_capacity: req.body.capacity || 0,
       location: req.body.location,
+      manufacturing_unit_image_url: req.body.manufacturing_unit_image_url || null,
       // Handle file objects - for now, store as null or placeholder
       msme_file_url: req.body.msme_file ? (typeof req.body.msme_file === 'string' ? req.body.msme_file : null) : null,
       other_certificates_url: req.body.other_certificates ? (typeof req.body.other_certificates === 'string' ? req.body.other_certificates : null) : null,
@@ -405,7 +407,8 @@ router.put('/manufacturer-profile', [
   body('coi_number').optional().isLength({ min: 1, max: 50 }).withMessage('COI number must be between 1 and 50 characters'),
   body('product_types').optional().isArray().withMessage('Product types must be an array'),
   body('daily_capacity').optional().isInt({ min: 0 }).withMessage('Daily capacity must be a positive integer'),
-  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters')
+  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters'),
+  body('manufacturing_unit_image_url').optional().isURL().withMessage('Manufacturing unit image URL must be a valid URL')
 ], async (req, res) => {
   try {
     // Check validation errors

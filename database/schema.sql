@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS manufacturer_profiles (
   product_types TEXT[] DEFAULT '{}',
   daily_capacity INTEGER DEFAULT 0,
   location TEXT,
+  manufacturing_unit_image_url TEXT,
   
   -- Certifications and Documents
   msme_number VARCHAR(50),

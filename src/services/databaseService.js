@@ -1361,7 +1361,7 @@ class DatabaseService {
         .from('requirement_responses')
         .select(`
           *,
-          requirement:requirements(id, requirement_text, quantity, brand_name, product_type, created_at, buyer_id)
+          requirement:requirements(id, requirement_text, quantity, product_type, created_at, buyer_id)
         `)
         .eq('manufacturer_id', manufacturerId);
 
@@ -1416,7 +1416,6 @@ class DatabaseService {
             requirement_no,
             requirement_text,
             quantity,
-            brand_name,
             product_type,
             created_at,
             buyer:buyer_profiles(id, full_name, phone_number, business_address)
@@ -1479,7 +1478,6 @@ class DatabaseService {
             requirement_no,
             requirement_text,
             quantity,
-            brand_name,
             product_type,
             product_link,
             image_url,

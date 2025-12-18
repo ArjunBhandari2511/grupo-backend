@@ -86,7 +86,6 @@ router.post('/', authenticateToken, async (req, res) => {
     const {
       requirement_text,
       quantity,
-      brand_name,
       product_type,
       product_link,
       image_url,
@@ -106,7 +105,6 @@ router.post('/', authenticateToken, async (req, res) => {
       buyer_id: req.user.userId,
       requirement_text: requirement_text.trim(),
       quantity: quantity ? parseInt(quantity) : null,
-      brand_name: brand_name ? brand_name.trim() : null,
       product_type: product_type ? product_type.trim() : null,
       product_link: product_link ? product_link.trim() : null,
       image_url: image_url ? image_url.trim() : null,
@@ -337,7 +335,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const {
       requirement_text,
       quantity,
-      brand_name,
       product_type,
       product_link,
       image_url,
@@ -348,7 +345,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const updateData = {};
     if (requirement_text !== undefined) updateData.requirement_text = requirement_text.trim();
     if (quantity !== undefined) updateData.quantity = parseInt(quantity);
-    if (brand_name !== undefined) updateData.brand_name = brand_name.trim();
     if (product_type !== undefined) updateData.product_type = product_type.trim();
     if (product_link !== undefined) updateData.product_link = product_link.trim();
     if (image_url !== undefined) updateData.image_url = image_url.trim();
@@ -706,11 +702,9 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
-    // Generate invoice number when status is accepted
+    // Update status
     let updateData = { status };
     if (status === 'accepted') {
-      const invoiceNumber = `RFI-${responseId.slice(-6).toUpperCase()}`;
-      updateData.invoice_number = invoiceNumber;
       updateData.accepted_at = new Date().toISOString();
     }
 

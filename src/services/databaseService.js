@@ -2193,6 +2193,95 @@ class DatabaseService {
     }
   }
 
+  /**
+   * Get today's design generation count for a buyer (from buyer_profiles table)
+   * @param {string} buyerId - Buyer ID
+   * @returns {Promise<number>} Count of designs generated today
+   */
+  async getTodayDesignGenerationCount(buyerId) {
+    try {
+      const { data, error } = await supabase
+        .from('buyer_profiles')
+        .select('daily_design_generation_count, last_design_generation_date')
+        .eq('id', buyerId)
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to fetch buyer profile: ${error.message}`);
+      }
+
+      if (!data) {
+        return 0;
+      }
+
+      // Check if we need to reset (date changed)
+      const today = new Date().toISOString().split('T')[0];
+      const lastDate = data.last_design_generation_date 
+        ? new Date(data.last_design_generation_date).toISOString().split('T')[0]
+        : null;
+
+      // If no date or date is different, count is 0
+      if (!lastDate || lastDate !== today) {
+        return 0;
+      }
+
+      return data.daily_design_generation_count || 0;
+    } catch (error) {
+      console.error('DatabaseService.getTodayDesignGenerationCount error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Increment design generation count for today (in buyer_profiles table)
+   * @param {string} buyerId - Buyer ID
+   * @returns {Promise<number>} New count after increment
+   */
+  async incrementDesignGenerationCount(buyerId) {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // First get current values
+      const { data: current, error: fetchError } = await supabase
+        .from('buyer_profiles')
+        .select('daily_design_generation_count, last_design_generation_date')
+        .eq('id', buyerId)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch buyer profile: ${fetchError.message}`);
+      }
+
+      const lastDate = current.last_design_generation_date 
+        ? new Date(current.last_design_generation_date).toISOString().split('T')[0]
+        : null;
+
+      // Reset count if date changed
+      const currentCount = (lastDate === today) ? (current.daily_design_generation_count || 0) : 0;
+      const newCount = currentCount + 1;
+
+      // Update buyer profile
+      const { data: updated, error: updateError } = await supabase
+        .from('buyer_profiles')
+        .update({
+          daily_design_generation_count: newCount,
+          last_design_generation_date: today
+        })
+        .eq('id', buyerId)
+        .select('daily_design_generation_count')
+        .single();
+
+      if (updateError) {
+        throw new Error(`Failed to increment design generation count: ${updateError.message}`);
+      }
+
+      return updated.daily_design_generation_count;
+    } catch (error) {
+      console.error('DatabaseService.incrementDesignGenerationCount error:', error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = new DatabaseService();

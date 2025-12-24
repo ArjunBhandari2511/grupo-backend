@@ -3,6 +3,14 @@ const router = express.Router();
 const databaseService = require('../services/databaseService');
 const { authenticateToken } = require('../middleware/auth');
 
+// Socket.io instance will be set by the server
+let io = null;
+
+// Function to set io instance from server.js
+router.setIo = (socketIo) => {
+  io = socketIo;
+};
+
 /**
  * Admin authentication middleware
  * Allows hardcoded admin token for demo purposes
@@ -113,6 +121,19 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Create requirement in database
     const requirement = await databaseService.createRequirement(requirementData);
+
+    // Fetch buyer information to include in socket event
+    const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
+    const enrichedRequirement = {
+      ...requirement,
+      buyer: buyer || null
+    };
+
+    // Emit socket event to all manufacturers
+    if (io) {
+      // Broadcast to all users in the manufacturer role room
+      io.to('role:manufacturer').emit('requirement:new', { requirement: enrichedRequirement });
+    }
 
     return res.status(201).json({
       success: true,

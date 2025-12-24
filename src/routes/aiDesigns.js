@@ -4,6 +4,14 @@ const databaseService = require('../services/databaseService');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadBase64Image } = require('../config/cloudinary');
 
+// Socket.io instance will be set by the server
+let io = null;
+
+// Function to set io instance from server.js
+router.setIo = (socketIo) => {
+  io = socketIo;
+};
+
 /**
  * Helper function to check if a string is a base64 image
  * @param {string} str - String to check
@@ -327,6 +335,19 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
 
     // Update status to published
     const updatedDesign = await databaseService.updateAIDesign(id, { status: 'published' });
+
+    // Fetch buyer information to include in socket event
+    const buyer = await databaseService.findBuyerProfile(updatedDesign.buyer_id);
+    const enrichedAIDesign = {
+      ...updatedDesign,
+      buyer: buyer || null
+    };
+
+    // Emit socket event to all manufacturers
+    if (io) {
+      // Broadcast to all users in the manufacturer role room
+      io.to('role:manufacturer').emit('ai-design:new', { aiDesign: enrichedAIDesign });
+    }
 
     return res.status(200).json({
       success: true,

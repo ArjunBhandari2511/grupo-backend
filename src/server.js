@@ -100,6 +100,10 @@ const onlineCounts = new Map(); // userId -> connection count
 
 io.use(socketAuth);
 
+// Pass io instance to routes for real-time updates
+requirementsRoutes.setIo(io);
+aiDesignsRoutes.setIo(io);
+
 io.on('connection', async (socket) => {
   try {
     const { userId, role } = socket.user;

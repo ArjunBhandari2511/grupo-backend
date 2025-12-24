@@ -103,6 +103,7 @@ io.use(socketAuth);
 // Pass io instance to routes for real-time updates
 requirementsRoutes.setIo(io);
 aiDesignsRoutes.setIo(io);
+aiDesignResponsesRoutes.setIo(io);
 
 io.on('connection', async (socket) => {
   try {

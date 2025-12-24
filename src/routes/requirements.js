@@ -504,6 +504,26 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
     // Create response in database
     const response = await databaseService.createRequirementResponse(responseData);
 
+    // Fetch manufacturer information to include in socket event
+    const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
+    
+    // Enrich response with requirement and manufacturer details
+    const enrichedResponse = {
+      ...response,
+      requirement: {
+        ...requirement,
+        buyer_id: requirement.buyer_id
+      },
+      manufacturer: manufacturer || null
+    };
+
+    // Emit socket event to the buyer who owns this requirement
+    if (io) {
+      io.to(`user:${requirement.buyer_id}`).emit('requirement:response:new', { 
+        response: enrichedResponse 
+      });
+    }
+
     return res.status(201).json({
       success: true,
       message: 'Response submitted successfully',
@@ -731,6 +751,28 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
 
     // Update response status
     const updatedResponse = await databaseService.updateRequirementResponse(responseId, updateData);
+
+    // Fetch manufacturer and buyer information to include in socket event
+    const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
+    const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
+
+    // Enrich response with requirement, buyer, and manufacturer details
+    const enrichedResponse = {
+      ...updatedResponse,
+      requirement: {
+        ...requirement,
+        buyer: buyer || null
+      },
+      manufacturer: manufacturer || null
+    };
+
+    // Emit socket event to the manufacturer who submitted this response
+    if (io) {
+      io.to(`user:${response.manufacturer_id}`).emit('requirement:response:status:updated', { 
+        response: enrichedResponse,
+        status: status
+      });
+    }
 
     return res.status(200).json({
       success: true,

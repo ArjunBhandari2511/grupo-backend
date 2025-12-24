@@ -3,6 +3,14 @@ const router = express.Router();
 const databaseService = require('../services/databaseService');
 const { authenticateToken } = require('../middleware/auth');
 
+// Socket.io instance will be set by the server
+let io = null;
+
+// Function to set io instance from server.js
+router.setIo = (socketIo) => {
+  io = socketIo;
+};
+
 /**
  * @route   POST /api/ai-design-responses
  * @desc    Create a response to an AI design (manufacturer responds)
@@ -99,6 +107,26 @@ router.post('/', authenticateToken, async (req, res) => {
 
     // Create AI design response in database
     const response = await databaseService.createAIDesignResponse(responseData);
+
+    // Fetch manufacturer information to include in socket event
+    const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
+    
+    // Enrich response with AI design and manufacturer details
+    const enrichedResponse = {
+      ...response,
+      ai_design: {
+        ...aiDesign,
+        buyer_id: aiDesign.buyer_id
+      },
+      manufacturer: manufacturer || null
+    };
+
+    // Emit socket event to the buyer who owns this AI design
+    if (io) {
+      io.to(`user:${aiDesign.buyer_id}`).emit('ai-design:response:new', { 
+        response: enrichedResponse 
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -250,6 +278,28 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 
     // Update response status
     const updatedResponse = await databaseService.updateAIDesignResponse(id, { status });
+
+    // Fetch manufacturer and buyer information to include in socket event
+    const manufacturer = await databaseService.findManufacturerProfile(existingResponse.manufacturer_id);
+    const buyer = await databaseService.findBuyerProfile(aiDesign.buyer_id);
+
+    // Enrich response with AI design, buyer, and manufacturer details
+    const enrichedResponse = {
+      ...updatedResponse,
+      ai_design: {
+        ...aiDesign,
+        buyer: buyer || null
+      },
+      manufacturer: manufacturer || null
+    };
+
+    // Emit socket event to the manufacturer who submitted this response
+    if (io) {
+      io.to(`user:${existingResponse.manufacturer_id}`).emit('ai-design:response:status:updated', { 
+        response: enrichedResponse,
+        status: status
+      });
+    }
 
     return res.status(200).json({
       success: true,

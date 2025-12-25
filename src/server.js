@@ -117,29 +117,6 @@ io.on('connection', async (socket) => {
     onlineCounts.set(userId, (onlineCounts.get(userId) || 0) + 1);
     io.emit('presence', { userId, online: true });
 
-    // typing:start / typing:stop
-    socket.on('typing:start', async ({ conversationId }) => {
-      try {
-        if (!conversationId) return;
-        const convo = await databaseService.getConversation(conversationId);
-        if (!convo) return;
-        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
-        if (!isParticipant) return;
-        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('typing', { conversationId, userId, isTyping: true });
-      } catch (_) {}
-    });
-
-    socket.on('typing:stop', async ({ conversationId }) => {
-      try {
-        if (!conversationId) return;
-        const convo = await databaseService.getConversation(conversationId);
-        if (!convo) return;
-        const isParticipant = (role === 'buyer' && convo.buyer_id === userId) || (role === 'manufacturer' && convo.manufacturer_id === userId);
-        if (!isParticipant) return;
-        io.to(`user:${convo.buyer_id}`).to(`user:${convo.manufacturer_id}`).emit('typing', { conversationId, userId, isTyping: false });
-      } catch (_) {}
-    });
-
     // message:send
     socket.on('message:send', async ({ conversationId, body, clientTempId, attachments, requirementId, aiDesignId }) => {
       try {

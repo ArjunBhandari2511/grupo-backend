@@ -59,7 +59,7 @@ router.get('/conversations', authenticateToken, async (req, res) => {
             peer: {
               id: c.buyer_id,
               role: 'buyer',
-              displayName: prof?.full_name || prof?.phone_number || 'Buyer'
+              displayName: prof?.buyer_identifier || 'Buyer'
             }
           };
         }

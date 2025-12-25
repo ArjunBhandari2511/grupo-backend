@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS buyer_profiles (
 CREATE TABLE IF NOT EXISTS manufacturer_profiles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   phone_number VARCHAR(20) UNIQUE NOT NULL,
+  manufacturer_id VARCHAR(50) UNIQUE,
   
   -- Basic Company Information (nullable until onboarding is completed)
   unit_name VARCHAR(255),
@@ -102,6 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_buyer_profiles_email ON buyer_profiles(email);
 
 -- Manufacturer profile indexes
 CREATE INDEX IF NOT EXISTS idx_manufacturer_profiles_phone_number ON manufacturer_profiles(phone_number);
+CREATE INDEX IF NOT EXISTS idx_manufacturer_profiles_manufacturer_id ON manufacturer_profiles(manufacturer_id);
 CREATE INDEX IF NOT EXISTS idx_manufacturer_profiles_onboarding_completed ON manufacturer_profiles(onboarding_completed);
 CREATE INDEX IF NOT EXISTS idx_manufacturer_profiles_verification_status ON manufacturer_profiles(verification_status);
 CREATE INDEX IF NOT EXISTS idx_manufacturer_profiles_business_type ON manufacturer_profiles(business_type);
@@ -220,6 +222,42 @@ $$ LANGUAGE plpgsql;
 -- Onboarding helper functions
 
 -- Function removed - buyer onboarding no longer tracked
+
+-- Function to generate manufacturer ID (MANU-0001, MANU-0002, etc.)
+CREATE OR REPLACE FUNCTION generate_manufacturer_id()
+RETURNS TRIGGER AS $$
+DECLARE
+  next_num INTEGER;
+  formatted_id VARCHAR(50);
+BEGIN
+  -- Only generate if manufacturer_id is not already set
+  IF NEW.manufacturer_id IS NULL THEN
+    -- Get the highest manufacturer ID number
+    SELECT COALESCE(MAX(CAST(SUBSTRING(manufacturer_id FROM '(\d+)$') AS INTEGER)), 0)
+    INTO next_num
+    FROM manufacturer_profiles
+    WHERE manufacturer_id LIKE 'MANU-%';
+    
+    -- Increment for next ID
+    next_num := next_num + 1;
+    
+    -- Format as MANU-0001, MANU-0002, etc.
+    formatted_id := 'MANU-' || LPAD(next_num::TEXT, 4, '0');
+    
+    -- Set the manufacturer ID
+    NEW.manufacturer_id := formatted_id;
+  END IF;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to auto-generate manufacturer ID before insert
+CREATE TRIGGER generate_manufacturer_id_trigger
+  BEFORE INSERT ON manufacturer_profiles
+  FOR EACH ROW
+  WHEN (NEW.manufacturer_id IS NULL)
+  EXECUTE FUNCTION generate_manufacturer_id();
 
 -- Function to mark manufacturer onboarding as completed
 CREATE OR REPLACE FUNCTION complete_manufacturer_onboarding(profile_id UUID)
@@ -457,3 +495,41 @@ CREATE INDEX IF NOT EXISTS idx_ai_design_responses_created_at ON ai_design_respo
 -- Trigger for AI design responses updated_at
 CREATE TRIGGER update_ai_design_responses_updated_at BEFORE UPDATE ON ai_design_responses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- Migration: Add manufacturer_id to existing manufacturers
+-- =============================================
+-- Run this migration script to assign manufacturer_id to existing manufacturers
+-- This should be run once after adding the manufacturer_id column
+
+DO $$
+DECLARE
+  manufacturer_record RECORD;
+  next_num INTEGER := 1;
+  formatted_id VARCHAR(50);
+BEGIN
+  -- Get the highest existing manufacturer_id number (if any)
+  SELECT COALESCE(MAX(CAST(SUBSTRING(manufacturer_id FROM '(\d+)$') AS INTEGER)), 0)
+  INTO next_num
+  FROM manufacturer_profiles
+  WHERE manufacturer_id IS NOT NULL AND manufacturer_id LIKE 'MANU-%';
+  
+  -- Start numbering from the next available number
+  next_num := next_num + 1;
+  
+  -- Update all manufacturers that don't have a manufacturer_id
+  FOR manufacturer_record IN 
+    SELECT id 
+    FROM manufacturer_profiles 
+    WHERE manufacturer_id IS NULL
+    ORDER BY created_at ASC
+  LOOP
+    formatted_id := 'MANU-' || LPAD(next_num::TEXT, 4, '0');
+    
+    UPDATE manufacturer_profiles
+    SET manufacturer_id = formatted_id
+    WHERE id = manufacturer_record.id;
+    
+    next_num := next_num + 1;
+  END LOOP;
+END $$;

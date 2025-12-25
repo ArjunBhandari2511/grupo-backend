@@ -1254,7 +1254,7 @@ class DatabaseService {
         .from('requirement_responses')
         .select(`
           *,
-          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, location, business_type)
         `)
         .eq('requirement_id', requirementId)
         .order('created_at', { ascending: false });
@@ -1420,7 +1420,7 @@ class DatabaseService {
             created_at,
             buyer:buyer_profiles(id, full_name, phone_number, business_address)
           ),
-          manufacturer:manufacturer_profiles(id, unit_name, phone_number, location, business_type)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, phone_number, location, business_type)
         `);
 
       // Apply status filter if provided
@@ -1531,7 +1531,7 @@ class DatabaseService {
           *,
           design:designs(id, product_name, product_category, image_url),
           buyer:buyer_profiles(id, full_name, phone_number),
-          manufacturer:manufacturer_profiles(id, unit_name, phone_number)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, phone_number)
         `)
         .single();
 
@@ -1612,7 +1612,7 @@ class DatabaseService {
           *,
           design:designs(id, product_name, product_category, image_url),
           buyer:buyer_profiles(id, full_name, phone_number, business_address),
-          manufacturer:manufacturer_profiles(id, unit_name, phone_number, location)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, phone_number, location)
         `)
         .eq('id', orderId)
         .single();
@@ -1641,7 +1641,7 @@ class DatabaseService {
         .select(`
           *,
           design:designs(id, product_name, product_category, image_url),
-          manufacturer:manufacturer_profiles(id, unit_name, phone_number, location, business_type)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, phone_number, location, business_type)
         `)
         .eq('buyer_id', buyerId);
 
@@ -1700,7 +1700,7 @@ class DatabaseService {
           *,
           design:designs(id, product_name, product_category, image_url),
           buyer:buyer_profiles(id, full_name, phone_number),
-          manufacturer:manufacturer_profiles(id, unit_name, phone_number)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, phone_number)
         `)
         .single();
 
@@ -2003,7 +2003,7 @@ class DatabaseService {
         .from('ai_design_responses')
         .select(`
           *,
-          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, location, business_type)
         `)
         .eq('ai_design_id', aiDesignId)
         .order('created_at', { ascending: false });
@@ -2034,7 +2034,7 @@ class DatabaseService {
         .from('ai_design_responses')
         .select(`
           *,
-          manufacturer:manufacturer_profiles(id, unit_name, location, business_type)
+          manufacturer:manufacturer_profiles(id, manufacturer_id, unit_name, location, business_type)
         `)
         .in('ai_design_id', aiDesignIds)
         .order('created_at', { ascending: false });

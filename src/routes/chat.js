@@ -48,7 +48,7 @@ router.get('/conversations', authenticateToken, async (req, res) => {
             peer: {
               id: c.manufacturer_id,
               role: 'manufacturer',
-              displayName: prof?.unit_name || 'Manufacturer'
+              displayName: prof?.manufacturer_id || 'Manufacturer'
             }
           };
         } else {

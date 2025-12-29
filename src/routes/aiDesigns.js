@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const databaseService = require('../services/databaseService');
+const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadBase64Image } = require('../config/cloudinary');
 
@@ -348,6 +349,20 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
       // Broadcast to all users in the manufacturer role room
       io.to('role:manufacturer').emit('ai-design:new', { aiDesign: enrichedAIDesign });
     }
+
+    // Send WhatsApp notifications to all manufacturers (async, don't block response)
+    (async () => {
+      try {
+        const manufacturers = await databaseService.getAllManufacturers();
+        for (const manufacturer of manufacturers) {
+          if (manufacturer.phone_number) {
+            await whatsappService.notifyNewAIDesign(manufacturer.phone_number, updatedDesign);
+          }
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (new AI design):', waError.message);
+      }
+    })();
 
     return res.status(200).json({
       success: true,

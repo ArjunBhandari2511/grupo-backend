@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const databaseService = require('../services/databaseService');
+const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 
 // Socket.io instance will be set by the server
@@ -127,6 +128,18 @@ router.post('/', authenticateToken, async (req, res) => {
         response: enrichedResponse 
       });
     }
+
+    // Send WhatsApp notification to the buyer (async, don't block response)
+    (async () => {
+      try {
+        const buyer = await databaseService.findBuyerProfile(aiDesign.buyer_id);
+        if (buyer && buyer.phone_number) {
+          await whatsappService.notifyNewAIDesignResponse(buyer.phone_number, response, manufacturer);
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (new AI design response):', waError.message);
+      }
+    })();
 
     return res.status(201).json({
       success: true,
@@ -300,6 +313,17 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
         status: status
       });
     }
+
+    // Send WhatsApp notification to the manufacturer (async, don't block response)
+    (async () => {
+      try {
+        if (manufacturer && manufacturer.phone_number) {
+          await whatsappService.notifyAIDesignResponseStatusUpdate(manufacturer.phone_number, status, aiDesign);
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (AI design response status update):', waError.message);
+      }
+    })();
 
     return res.status(200).json({
       success: true,

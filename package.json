@@ -22,6 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "@supabase/supabase-js": "^2.79.0",
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.8.0",
     "compression": "^1.8.1",

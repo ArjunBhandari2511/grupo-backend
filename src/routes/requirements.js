@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const databaseService = require('../services/databaseService');
+const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 
 // Socket.io instance will be set by the server
@@ -134,6 +135,20 @@ router.post('/', authenticateToken, async (req, res) => {
       // Broadcast to all users in the manufacturer role room
       io.to('role:manufacturer').emit('requirement:new', { requirement: enrichedRequirement });
     }
+
+    // Send WhatsApp notifications to all manufacturers (async, don't block response)
+    (async () => {
+      try {
+        const manufacturers = await databaseService.getAllManufacturers();
+        for (const manufacturer of manufacturers) {
+          if (manufacturer.phone_number) {
+            await whatsappService.notifyNewRequirement(manufacturer.phone_number, requirement);
+          }
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (new requirement):', waError.message);
+      }
+    })();
 
     return res.status(201).json({
       success: true,
@@ -524,6 +539,18 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
+    // Send WhatsApp notification to the buyer (async, don't block response)
+    (async () => {
+      try {
+        const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
+        if (buyer && buyer.phone_number) {
+          await whatsappService.notifyNewRequirementResponse(buyer.phone_number, response, manufacturer);
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (new requirement response):', waError.message);
+      }
+    })();
+
     return res.status(201).json({
       success: true,
       message: 'Response submitted successfully',
@@ -773,6 +800,17 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
         status: status
       });
     }
+
+    // Send WhatsApp notification to the manufacturer (async, don't block response)
+    (async () => {
+      try {
+        if (manufacturer && manufacturer.phone_number) {
+          await whatsappService.notifyResponseStatusUpdate(manufacturer.phone_number, status, requirement);
+        }
+      } catch (waError) {
+        console.error('WhatsApp notification error (response status update):', waError.message);
+      }
+    })();
 
     return res.status(200).json({
       success: true,

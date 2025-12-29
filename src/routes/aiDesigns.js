@@ -367,7 +367,7 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
 /**
  * @route   DELETE /api/ai-designs/:id
  * @desc    Delete an AI design
- * @access  Private (Buyer can delete their own)
+ * @access  Private (Buyer can delete their own, Admin can delete any)
  */
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
@@ -383,8 +383,13 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Only the buyer who created it can delete
-    if (req.user.role !== 'buyer' || existingAIDesign.buyer_id !== req.user.userId) {
+    // Allow deletion if:
+    // 1. User is admin (can delete any AI design)
+    // 2. User is buyer and owns the AI design
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = req.user.role === 'buyer' && existingAIDesign.buyer_id === req.user.userId;
+
+    if (!isAdmin && !isOwner) {
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to delete this AI design'

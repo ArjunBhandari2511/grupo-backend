@@ -4,10 +4,6 @@ const databaseService = require('../services/databaseService');
 
 const router = express.Router();
 
-/**
- * Admin authentication middleware
- * Allows hardcoded admin token for demo purposes
- */
 const authenticateAdmin = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -21,14 +17,12 @@ const authenticateAdmin = (req, res, next) => {
 
     const token = authHeader.substring(7);
     
-    // Check for hardcoded admin token (for demo/dev purposes)
     const ADMIN_TOKENS = [
       'demo_admin_token',
-      process.env.ADMIN_TOKEN // Allow env-based admin token
+      process.env.ADMIN_TOKEN
     ].filter(Boolean);
     
     if (ADMIN_TOKENS.includes(token)) {
-      // Set admin user for demo
       req.user = {
         userId: 'admin_demo',
         role: 'admin',
@@ -38,7 +32,6 @@ const authenticateAdmin = (req, res, next) => {
       return next();
     }
     
-    // Try normal JWT authentication as fallback
     try {
       const authService = require('../services/authService');
       const decoded = authService.verifyJWT(token);
@@ -53,7 +46,7 @@ const authenticateAdmin = (req, res, next) => {
         return next();
       }
     } catch {
-      // JWT verification failed, continue to error
+      // JWT verification failed
     }
     
     return res.status(403).json({
@@ -69,14 +62,9 @@ const authenticateAdmin = (req, res, next) => {
   }
 };
 
-/**
- * @route   GET /api/manufacturers
- * @desc    Get all manufacturers with optional filters
- * @access  Public
- */
+// GET /api/manufacturers
 router.get('/', async (req, res) => {
   try {
-    // Extract query parameters
     const options = {
       verified: req.query.verified !== undefined ? req.query.verified === 'true' : undefined,
       verification_status: req.query.verification_status,
@@ -100,10 +88,8 @@ router.get('/', async (req, res) => {
         count: manufacturers.length
       }
     });
-
   } catch (error) {
     console.error('Get manufacturers error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to retrieve manufacturers'
@@ -111,21 +97,15 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @route   PATCH /api/manufacturers/:manufacturerId/verification-status
- * @desc    Update manufacturer verification status (Admin only)
- * @access  Private (Admin only)
- */
+// PATCH /api/manufacturers/:manufacturerId/verification-status (Admin only)
 router.patch('/:manufacturerId/verification-status', 
   authenticateAdmin,
   [
     body('verification_status')
       .isIn(['pending', 'Accepted', 'Rejected', 'Blocked'])
-      .withMessage('verification_status must be one of: pending, Accepted, Rejected, Blocked')
   ],
   async (req, res) => {
     try {
-      // Check validation errors
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({
@@ -138,7 +118,6 @@ router.patch('/:manufacturerId/verification-status',
       const { manufacturerId } = req.params;
       const { verification_status } = req.body;
 
-      // Check if manufacturer exists
       const manufacturer = await databaseService.findManufacturerProfile(manufacturerId);
       if (!manufacturer) {
         return res.status(404).json({
@@ -147,8 +126,6 @@ router.patch('/:manufacturerId/verification-status',
         });
       }
 
-      // Update verification status
-      // Also update is_verified based on status
       const updateData = {
         verification_status,
         is_verified: verification_status === 'Accepted' ? true : false,
@@ -160,14 +137,10 @@ router.patch('/:manufacturerId/verification-status',
       res.status(200).json({
         success: true,
         message: 'Verification status updated successfully',
-        data: {
-          manufacturer: updatedManufacturer
-        }
+        data: { manufacturer: updatedManufacturer }
       });
-
     } catch (error) {
       console.error('Update verification status error:', error);
-      
       res.status(400).json({
         success: false,
         message: error.message || 'Failed to update verification status'
@@ -177,4 +150,3 @@ router.patch('/:manufacturerId/verification-status',
 );
 
 module.exports = router;
-

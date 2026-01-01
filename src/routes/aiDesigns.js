@@ -5,35 +5,21 @@ const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 const { uploadBase64Image } = require('../config/cloudinary');
 
-// Socket.io instance will be set by the server
 let io = null;
 
-// Function to set io instance from server.js
 router.setIo = (socketIo) => {
   io = socketIo;
 };
 
-/**
- * Helper function to check if a string is a base64 image
- * @param {string} str - String to check
- * @returns {boolean} - True if string is base64 image
- */
 const isBase64Image = (str) => {
   if (!str || typeof str !== 'string') return false;
-  // Check if it's a data URI or pure base64
   return str.startsWith('data:image/') || 
          (str.length > 100 && /^[A-Za-z0-9+/=]+$/.test(str.replace(/\s/g, '')));
 };
 
-/**
- * @route   POST /api/ai-designs
- * @desc    Create a new AI-generated design
- * @access  Private (Buyer only)
- * @note    Automatically uploads base64 images to Cloudinary
- */
+// POST /api/ai-designs - Create new AI design (Buyer only)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -51,7 +37,6 @@ router.post('/', authenticateToken, async (req, res) => {
       status
     } = req.body;
 
-    // Validate required fields
     if (!image_url || image_url.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -75,10 +60,8 @@ router.post('/', authenticateToken, async (req, res) => {
 
     let finalImageUrl = image_url.trim();
 
-    // Check if image_url is a base64 image and upload to Cloudinary
     if (isBase64Image(image_url)) {
       try {
-        console.log('Uploading base64 image to Cloudinary...');
         const uploadResult = await uploadBase64Image(image_url, {
           folder: `groupo-ai-designs/${req.user.userId}`,
           context: {
@@ -88,9 +71,7 @@ router.post('/', authenticateToken, async (req, res) => {
           },
           tags: ['ai-design', 'generated', apparel_type.toLowerCase().replace(/\s+/g, '-')]
         });
-        
         finalImageUrl = uploadResult.url;
-        console.log('Image uploaded to Cloudinary:', uploadResult.url);
       } catch (uploadError) {
         console.error('Failed to upload image to Cloudinary:', uploadError);
         return res.status(500).json({
@@ -99,12 +80,8 @@ router.post('/', authenticateToken, async (req, res) => {
           error: uploadError.message
         });
       }
-    } else {
-      // If it's already a URL (Cloudinary or external), use it as-is
-      console.log('Using provided image URL (not base64)');
     }
 
-    // Create AI design data
     const aiDesignData = {
       buyer_id: req.user.userId,
       image_url: finalImageUrl,
@@ -116,7 +93,6 @@ router.post('/', authenticateToken, async (req, res) => {
       status: status || 'draft'
     };
 
-    // Create AI design in database
     const aiDesign = await databaseService.createAIDesign(aiDesignData);
 
     return res.status(201).json({
@@ -134,13 +110,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/ai-designs
- * @desc    Get AI designs
- * @access  Private
- * @note    Buyers see their own designs, Manufacturers see all published designs
- * @query   include_responses - Optional: 'true' to include responses (optimizes N+1 queries)
- */
+// GET /api/ai-designs - Get AI designs
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { limit, offset, status, apparel_type, include_responses } = req.query;
@@ -155,16 +125,12 @@ router.get('/', authenticateToken, async (req, res) => {
     let aiDesigns;
 
     if (req.user.role === 'buyer') {
-      // Buyers can see all their AI designs (draft and published)
-      // Remove status filter for buyers to show all their designs
       const buyerOptions = { ...options };
       delete buyerOptions.status;
       aiDesigns = await databaseService.getBuyerAIDesigns(req.user.userId, buyerOptions);
     } else if (req.user.role === 'manufacturer') {
-      // Manufacturers can see all published AI designs
       aiDesigns = await databaseService.getAllAIDesigns(options);
     } else if (req.user.role === 'admin') {
-      // Admins can see all published AI designs with buyer information
       options.includeBuyer = true;
       aiDesigns = await databaseService.getAllAIDesigns(options);
     } else {
@@ -174,12 +140,10 @@ router.get('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // If include_responses is true, batch fetch all responses to avoid N+1 queries
     if (include_responses === 'true' && aiDesigns.length > 0) {
       const designIds = aiDesigns.map(design => design.id);
       const responsesMap = await databaseService.getAIDesignResponsesBatch(designIds);
       
-      // Attach responses to each design
       aiDesigns = aiDesigns.map(design => ({
         ...design,
         responses: responsesMap.get(design.id) || []
@@ -201,17 +165,12 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/ai-designs/conversation/:conversationId/accepted
- * @desc    Get accepted AI designs for a conversation (buyer_id and manufacturer_id match)
- * @access  Private
- * @note    This route MUST come before /:id to avoid route conflicts
- */
+// GET /api/ai-designs/conversation/:conversationId/accepted - Get accepted AI designs for conversation
+// Note: This route MUST come before /:id to avoid route conflicts
 router.get('/conversation/:conversationId/accepted', authenticateToken, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    // Get conversation to extract buyer_id and manufacturer_id
     const conversation = await databaseService.getConversation(conversationId);
     
     if (!conversation) {
@@ -221,7 +180,6 @@ router.get('/conversation/:conversationId/accepted', authenticateToken, async (r
       });
     }
 
-    // Verify user is a participant in this conversation
     const { userId, role } = req.user;
     if (!((role === 'buyer' && conversation.buyer_id === userId) || 
           (role === 'manufacturer' && conversation.manufacturer_id === userId))) {
@@ -231,7 +189,6 @@ router.get('/conversation/:conversationId/accepted', authenticateToken, async (r
       });
     }
 
-    // Get accepted AI designs for this conversation
     const aiDesigns = await databaseService.getAcceptedAIDesignsForConversation(
       conversation.buyer_id,
       conversation.manufacturer_id
@@ -252,11 +209,7 @@ router.get('/conversation/:conversationId/accepted', authenticateToken, async (r
   }
 });
 
-/**
- * @route   GET /api/ai-designs/:id
- * @desc    Get a single AI design by ID
- * @access  Private
- */
+// GET /api/ai-designs/:id - Get single AI design by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -270,7 +223,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Buyers can only view their own AI designs
     if (req.user.role === 'buyer' && aiDesign.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -278,7 +230,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Include buyer details
     const buyer = await databaseService.findBuyerProfile(aiDesign.buyer_id);
     const enrichedAIDesign = {
       ...aiDesign,
@@ -299,16 +250,11 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   PATCH /api/ai-designs/:id/push
- * @desc    Push an AI design to manufacturers (change status to published)
- * @access  Private (Buyer can push their own designs)
- */
+// PATCH /api/ai-designs/:id/push - Push AI design to manufacturers (Buyer only)
 router.patch('/:id/push', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -316,7 +262,6 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get the existing AI design
     const existingAIDesign = await databaseService.getAIDesign(id);
 
     if (!existingAIDesign) {
@@ -326,7 +271,6 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
       });
     }
 
-    // Only the buyer who created it can push
     if (existingAIDesign.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -334,23 +278,18 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update status to published
     const updatedDesign = await databaseService.updateAIDesign(id, { status: 'published' });
 
-    // Fetch buyer information to include in socket event
     const buyer = await databaseService.findBuyerProfile(updatedDesign.buyer_id);
     const enrichedAIDesign = {
       ...updatedDesign,
       buyer: buyer || null
     };
 
-    // Emit socket event to all manufacturers
     if (io) {
-      // Broadcast to all users in the manufacturer role room
       io.to('role:manufacturer').emit('ai-design:new', { aiDesign: enrichedAIDesign });
     }
 
-    // Send WhatsApp notifications to all manufacturers (async, don't block response)
     (async () => {
       try {
         const manufacturers = await databaseService.getAllManufacturers();
@@ -360,7 +299,7 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
           }
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (new AI design):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -379,16 +318,11 @@ router.patch('/:id/push', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   DELETE /api/ai-designs/:id
- * @desc    Delete an AI design
- * @access  Private (Buyer can delete their own, Admin can delete any)
- */
+// DELETE /api/ai-designs/:id - Delete AI design (Buyer or Admin)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Get the existing AI design
     const existingAIDesign = await databaseService.getAIDesign(id);
 
     if (!existingAIDesign) {
@@ -398,9 +332,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Allow deletion if:
-    // 1. User is admin (can delete any AI design)
-    // 2. User is buyer and owns the AI design
     const isAdmin = req.user.role === 'admin';
     const isOwner = req.user.role === 'buyer' && existingAIDesign.buyer_id === req.user.userId;
 
@@ -411,7 +342,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete AI design from database
     await databaseService.deleteAIDesign(id);
 
     return res.status(200).json({
@@ -429,4 +359,3 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

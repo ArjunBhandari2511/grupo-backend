@@ -5,11 +5,9 @@ const { uploadToCloudinary } = require('../config/cloudinary');
 
 const router = express.Router();
 
-// Configure multer to use memory storage
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  // Define allowed file types
   const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   const allowedAudioTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm'];
   const allowedDocTypes = [
@@ -41,15 +39,10 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
-  }
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
-/**
- * POST /upload/chat-file
- * Upload a file for chat (image, audio, document, video)
- */
+// POST /upload/chat-file
 router.post('/chat-file', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -69,7 +62,6 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
       });
     }
 
-    // Determine resource type based on mime type
     let resourceType = 'auto';
     let fileType = 'file';
 
@@ -80,14 +72,13 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
       resourceType = 'video';
       fileType = 'video';
     } else if (req.file.mimetype.startsWith('audio/')) {
-      resourceType = 'video'; // Cloudinary uses 'video' for audio files
+      resourceType = 'video';
       fileType = 'audio';
     } else {
       resourceType = 'raw';
       fileType = 'document';
     }
 
-    // Upload to Cloudinary
     const uploadOptions = {
       folder: `groupo-chat/${conversationId}`,
       resource_type: resourceType,
@@ -100,7 +91,6 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
       tags: ['chat', role, conversationId]
     };
 
-    // For images, add optimization transformations
     if (fileType === 'image') {
       uploadOptions.transformation = [
         { quality: 'auto', fetch_format: 'auto' }
@@ -109,7 +99,6 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
 
     const result = await uploadToCloudinary(req.file.buffer, uploadOptions);
 
-    // Prepare response data
     const fileData = {
       url: result.secure_url,
       publicId: result.public_id,
@@ -120,12 +109,11 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
       format: result.format,
       width: result.width,
       height: result.height,
-      duration: result.duration, // For videos/audio
+      duration: result.duration,
       thumbnail: fileType === 'image' ? result.secure_url : null,
       resourceType: result.resource_type
     };
 
-    // Generate thumbnail for videos
     if (fileType === 'video' && result.public_id) {
       const { cloudinary } = require('../config/cloudinary');
       fileData.thumbnail = cloudinary.url(result.public_id, {
@@ -150,10 +138,7 @@ router.post('/chat-file', authenticateToken, upload.single('file'), async (req, 
   }
 });
 
-/**
- * POST /upload/multiple
- * Upload multiple files at once
- */
+// POST /upload/multiple
 router.post('/multiple', authenticateToken, upload.array('files', 5), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -242,14 +227,9 @@ router.post('/multiple', authenticateToken, upload.array('files', 5), async (req
   }
 });
 
-/**
- * POST /upload/ai-design-image
- * Upload a base64 AI design image to Cloudinary
- * @access  Private (Buyer only)
- */
+// POST /upload/ai-design-image (Buyer only)
 router.post('/ai-design-image', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -268,7 +248,6 @@ router.post('/ai-design-image', authenticateToken, async (req, res) => {
 
     const { uploadBase64Image } = require('../config/cloudinary');
 
-    // Upload to Cloudinary
     const uploadResult = await uploadBase64Image(image_base64, {
       folder: `groupo-ai-designs/${req.user.userId}`,
       context: {
@@ -300,4 +279,3 @@ router.post('/ai-design-image', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

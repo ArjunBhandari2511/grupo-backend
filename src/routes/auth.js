@@ -4,22 +4,16 @@ const authService = require('../services/authService');
 
 const router = express.Router();
 
-/**
- * Admin credentials (hardcoded for demo purposes)
- * In production, these should be stored securely in environment variables or a database
- */
 const ADMIN_CREDENTIALS = {
   username: process.env.ADMIN_USERNAME || 'admin72397',
   password: process.env.ADMIN_PASSWORD || '72397admin'
 };
 
-// Validation middleware
 const validatePhoneNumber = [
   body('phoneNumber')
     .isMobilePhone('any')
     .withMessage('Please provide a valid phone number')
     .custom((value) => {
-      // Ensure phone number starts with +
       if (!value.startsWith('+')) {
         throw new Error('Phone number must include country code (e.g., +1234567890)');
       }
@@ -46,14 +40,9 @@ const validateOTP = [
     .withMessage('Role must be either buyer, manufacturer, or admin')
 ];
 
-/**
- * @route   POST /api/auth/send-otp
- * @desc    Send OTP to phone number
- * @access  Public
- */
+// POST /api/auth/send-otp
 router.post('/send-otp', validatePhoneNumber, async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -64,8 +53,6 @@ router.post('/send-otp', validatePhoneNumber, async (req, res) => {
     }
 
     const { phoneNumber, role = 'buyer' } = req.body;
-
-    // Send OTP
     const result = await authService.sendOTP(phoneNumber, role);
 
     res.status(200).json({
@@ -77,10 +64,8 @@ router.post('/send-otp', validatePhoneNumber, async (req, res) => {
         messageSid: result.messageSid
       }
     });
-
   } catch (error) {
     console.error('Send OTP error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to send OTP',
@@ -89,14 +74,9 @@ router.post('/send-otp', validatePhoneNumber, async (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/auth/verify-otp
- * @desc    Verify OTP and authenticate user
- * @access  Public
- */
+// POST /api/auth/verify-otp
 router.post('/verify-otp', validateOTP, async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -107,8 +87,6 @@ router.post('/verify-otp', validateOTP, async (req, res) => {
     }
 
     const { phoneNumber, otp, role = 'buyer' } = req.body;
-
-    // Verify OTP
     const result = await authService.verifyOTP(phoneNumber, otp, role);
 
     res.status(200).json({
@@ -120,10 +98,8 @@ router.post('/verify-otp', validateOTP, async (req, res) => {
         expiresIn: process.env.JWT_EXPIRES_IN || '24h'
       }
     });
-
   } catch (error) {
     console.error('Verify OTP error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'OTP verification failed',
@@ -132,11 +108,7 @@ router.post('/verify-otp', validateOTP, async (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/auth/refresh-token
- * @desc    Refresh JWT token
- * @access  Private
- */
+// POST /api/auth/refresh-token
 router.post('/refresh-token', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -150,8 +122,6 @@ router.post('/refresh-token', async (req, res) => {
 
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
-
-    // Generate new token (preserve user id and role)
     const newToken = authService.generateJWT(decoded.userId, decoded.phoneNumber, decoded.role);
 
     res.status(200).json({
@@ -162,10 +132,8 @@ router.post('/refresh-token', async (req, res) => {
         expiresIn: process.env.JWT_EXPIRES_IN || '24h'
       }
     });
-
   } catch (error) {
     console.error('Refresh token error:', error);
-    
     res.status(401).json({
       success: false,
       message: 'Invalid or expired token'
@@ -173,11 +141,7 @@ router.post('/refresh-token', async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/auth/verify-token
- * @desc    Verify JWT token
- * @access  Private
- */
+// GET /api/auth/verify-token
 router.get('/verify-token', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -202,10 +166,8 @@ router.get('/verify-token', async (req, res) => {
         }
       }
     });
-
   } catch (error) {
     console.error('Verify token error:', error);
-    
     res.status(401).json({
       success: false,
       message: 'Invalid or expired token'
@@ -213,11 +175,7 @@ router.get('/verify-token', async (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/auth/logout
- * @desc    Logout user
- * @access  Private
- */
+// POST /api/auth/logout
 router.post('/logout', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -236,10 +194,8 @@ router.post('/logout', async (req, res) => {
       success: true,
       message: 'Logged out successfully'
     });
-
   } catch (error) {
     console.error('Logout error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Logout failed'
@@ -247,27 +203,21 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-
-/**
- * @route   POST /api/auth/manufacturer-onboarding
- * @desc    Submit manufacturer onboarding data
- * @access  Private
- */
+// POST /api/auth/manufacturer-onboarding
 router.post('/manufacturer-onboarding', [
-  body('unit_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Unit name is required and must be between 1 and 255 characters'),
-  body('business_type').notEmpty().isLength({ min: 1, max: 100 }).withMessage('Business type is required and must be between 1 and 100 characters'),
-  body('gst_number').notEmpty().isLength({ min: 1, max: 20 }).withMessage('GST number is required and must be between 1 and 20 characters'),
-  body('pan_number').optional().isLength({ min: 1, max: 20 }).withMessage('PAN number must be between 1 and 20 characters'),
-  body('coi_number').optional().isLength({ min: 1, max: 50 }).withMessage('COI number must be between 1 and 50 characters'),
-  body('product_types').optional().isArray().withMessage('Product types must be an array'),
-  body('capacity').optional().isInt({ min: 0 }).withMessage('Capacity must be a positive integer'),
-  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters'),
-  body('manufacturing_unit_image_url').optional().isURL().withMessage('Manufacturing unit image URL must be a valid URL'),
+  body('unit_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Unit name is required'),
+  body('business_type').notEmpty().isLength({ min: 1, max: 100 }).withMessage('Business type is required'),
+  body('gst_number').notEmpty().isLength({ min: 1, max: 20 }).withMessage('GST number is required'),
+  body('pan_number').optional().isLength({ min: 1, max: 20 }),
+  body('coi_number').optional().isLength({ min: 1, max: 50 }),
+  body('product_types').optional().isArray(),
+  body('capacity').optional().isInt({ min: 0 }),
+  body('location').optional().isLength({ min: 1, max: 1000 }),
+  body('manufacturing_unit_image_url').optional().isURL(),
   body('msme_file').optional(),
   body('other_certificates').optional()
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -278,7 +228,6 @@ router.post('/manufacturer-onboarding', [
     }
 
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -289,14 +238,11 @@ router.post('/manufacturer-onboarding', [
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get or create profile from database
     let profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
     if (!profile) {
-      // Create new profile if it doesn't exist
       profile = await authService.createManufacturerProfile(decoded.phoneNumber);
     }
 
-    // Submit onboarding data
     const onboardingData = {
       unit_name: req.body.unit_name,
       business_type: req.body.business_type,
@@ -307,7 +253,6 @@ router.post('/manufacturer-onboarding', [
       daily_capacity: req.body.capacity || 0,
       location: req.body.location,
       manufacturing_unit_image_url: req.body.manufacturing_unit_image_url || null,
-      // Handle file objects - for now, store as null or placeholder
       msme_file_url: req.body.msme_file ? (typeof req.body.msme_file === 'string' ? req.body.msme_file : null) : null,
       other_certificates_url: req.body.other_certificates ? (typeof req.body.other_certificates === 'string' ? req.body.other_certificates : null) : null,
       onboarding_completed: true,
@@ -319,14 +264,10 @@ router.post('/manufacturer-onboarding', [
     res.status(200).json({
       success: true,
       message: 'Onboarding completed successfully',
-      data: {
-        profile: updatedProfile
-      }
+      data: { profile: updatedProfile }
     });
-
   } catch (error) {
     console.error('Onboarding submission error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to submit onboarding data'
@@ -334,15 +275,10 @@ router.post('/manufacturer-onboarding', [
   }
 });
 
-/**
- * @route   GET /api/auth/manufacturer-profile
- * @desc    Get manufacturer profile
- * @access  Private
- */
+// GET /api/auth/manufacturer-profile
 router.get('/manufacturer-profile', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -353,7 +289,6 @@ router.get('/manufacturer-profile', async (req, res) => {
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get profile from database
     const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
     if (!profile) {
       return res.status(404).json({
@@ -362,7 +297,6 @@ router.get('/manufacturer-profile', async (req, res) => {
       });
     }
 
-    // Get full manufacturer profile data
     const fullProfile = await authService.getManufacturerProfile(profile.id);
 
     res.status(200).json({
@@ -383,10 +317,8 @@ router.get('/manufacturer-profile', async (req, res) => {
         }
       }
     });
-
   } catch (error) {
     console.error('Get manufacturer profile error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to get profile'
@@ -394,24 +326,19 @@ router.get('/manufacturer-profile', async (req, res) => {
   }
 });
 
-/**
- * @route   PUT /api/auth/manufacturer-profile
- * @desc    Update manufacturer profile
- * @access  Private
- */
+// PUT /api/auth/manufacturer-profile
 router.put('/manufacturer-profile', [
-  body('unit_name').optional().isLength({ min: 1, max: 255 }).withMessage('Unit name must be between 1 and 255 characters'),
-  body('business_type').optional().isLength({ min: 1, max: 100 }).withMessage('Business type must be between 1 and 100 characters'),
-  body('gst_number').optional().isLength({ min: 1, max: 20 }).withMessage('GST number must be between 1 and 20 characters'),
-  body('pan_number').optional().isLength({ min: 1, max: 20 }).withMessage('PAN number must be between 1 and 20 characters'),
-  body('coi_number').optional().isLength({ min: 1, max: 50 }).withMessage('COI number must be between 1 and 50 characters'),
-  body('product_types').optional().isArray().withMessage('Product types must be an array'),
-  body('daily_capacity').optional().isInt({ min: 0 }).withMessage('Daily capacity must be a positive integer'),
-  body('location').optional().isLength({ min: 1, max: 1000 }).withMessage('Location must be between 1 and 1000 characters'),
-  body('manufacturing_unit_image_url').optional().isURL().withMessage('Manufacturing unit image URL must be a valid URL')
+  body('unit_name').optional().isLength({ min: 1, max: 255 }),
+  body('business_type').optional().isLength({ min: 1, max: 100 }),
+  body('gst_number').optional().isLength({ min: 1, max: 20 }),
+  body('pan_number').optional().isLength({ min: 1, max: 20 }),
+  body('coi_number').optional().isLength({ min: 1, max: 50 }),
+  body('product_types').optional().isArray(),
+  body('daily_capacity').optional().isInt({ min: 0 }),
+  body('location').optional().isLength({ min: 1, max: 1000 }),
+  body('manufacturing_unit_image_url').optional().isURL()
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -422,7 +349,6 @@ router.put('/manufacturer-profile', [
     }
 
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -433,7 +359,6 @@ router.put('/manufacturer-profile', [
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get profile from database
     const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
     if (!profile) {
       return res.status(404).json({
@@ -442,21 +367,15 @@ router.put('/manufacturer-profile', [
       });
     }
 
-    // Update manufacturer profile
-    const profileData = req.body;
-    const updatedProfile = await authService.updateManufacturerProfile(profile.id, profileData);
+    const updatedProfile = await authService.updateManufacturerProfile(profile.id, req.body);
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      data: {
-        profile: updatedProfile
-      }
+      data: { profile: updatedProfile }
     });
-
   } catch (error) {
     console.error('Update manufacturer profile error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to update profile'
@@ -464,21 +383,12 @@ router.put('/manufacturer-profile', [
   }
 });
 
-/**
- * @route   POST /api/auth/admin-login
- * @desc    Admin login with username and password
- * @access  Public
- */
+// POST /api/auth/admin-login
 router.post('/admin-login', [
-  body('username')
-    .notEmpty()
-    .withMessage('Username is required'),
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
+  body('username').notEmpty().withMessage('Username is required'),
+  body('password').notEmpty().withMessage('Password is required')
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -490,7 +400,6 @@ router.post('/admin-login', [
 
     const { username, password } = req.body;
 
-    // Verify admin credentials
     if (username !== ADMIN_CREDENTIALS.username || password !== ADMIN_CREDENTIALS.password) {
       return res.status(401).json({
         success: false,
@@ -498,7 +407,6 @@ router.post('/admin-login', [
       });
     }
 
-    // Generate JWT token for admin
     const adminProfileId = 'admin_' + ADMIN_CREDENTIALS.username;
     const token = authService.generateJWT(adminProfileId, ADMIN_CREDENTIALS.username, 'admin');
 
@@ -514,10 +422,8 @@ router.post('/admin-login', [
         expiresIn: process.env.JWT_EXPIRES_IN || '24h'
       }
     });
-
   } catch (error) {
     console.error('Admin login error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Login failed'
@@ -525,11 +431,7 @@ router.post('/admin-login', [
   }
 });
 
-/**
- * @route   POST /api/auth/buyer-onboarding
- * @desc    Submit buyer onboarding data (deprecated - buyer onboarding removed)
- * @access  Private
- */
+// POST /api/auth/buyer-onboarding (deprecated)
 router.post('/buyer-onboarding', async (req, res) => {
   return res.status(410).json({
     success: false,
@@ -537,15 +439,10 @@ router.post('/buyer-onboarding', async (req, res) => {
   });
 });
 
-/**
- * @route   GET /api/auth/buyer-profile
- * @desc    Get buyer profile
- * @access  Private
- */
+// GET /api/auth/buyer-profile
 router.get('/buyer-profile', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -556,7 +453,6 @@ router.get('/buyer-profile', async (req, res) => {
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get profile from database
     const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
     if (!profile) {
       return res.status(404).json({
@@ -565,10 +461,8 @@ router.get('/buyer-profile', async (req, res) => {
       });
     }
 
-    // For buyer profile, get the full profile data
     const fullProfile = await authService.getBuyerProfile(profile.id);
 
-    // Get design generation status
     const databaseService = require('../services/databaseService');
     const designCount = await databaseService.getTodayDesignGenerationCount(profile.id);
     const DAILY_LIMIT = 5;
@@ -593,10 +487,8 @@ router.get('/buyer-profile', async (req, res) => {
         designGenerationStatus
       }
     });
-
   } catch (error) {
     console.error('Get buyer profile error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to get profile'
@@ -604,15 +496,10 @@ router.get('/buyer-profile', async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/auth/buyer-profile/design-generation-status
- * @desc    Get design generation status for buyer
- * @access  Private (Buyer only)
- */
+// GET /api/auth/buyer-profile/design-generation-status
 router.get('/buyer-profile/design-generation-status', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -641,16 +528,14 @@ router.get('/buyer-profile/design-generation-status', async (req, res) => {
     const databaseService = require('../services/databaseService');
     const DAILY_LIMIT = 5;
     const count = await databaseService.getTodayDesignGenerationCount(profile.id);
-    const remaining = Math.max(0, DAILY_LIMIT - count);
-    const canGenerate = count < DAILY_LIMIT;
 
     return res.status(200).json({
       success: true,
       data: {
         count,
-        remaining,
+        remaining: Math.max(0, DAILY_LIMIT - count),
         limit: DAILY_LIMIT,
-        canGenerate
+        canGenerate: count < DAILY_LIMIT
       }
     });
   } catch (error) {
@@ -663,15 +548,10 @@ router.get('/buyer-profile/design-generation-status', async (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/auth/buyer-profile/increment-design-generation
- * @desc    Increment design generation count for buyer
- * @access  Private (Buyer only)
- */
+// POST /api/auth/buyer-profile/increment-design-generation
 router.post('/buyer-profile/increment-design-generation', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -700,7 +580,6 @@ router.post('/buyer-profile/increment-design-generation', async (req, res) => {
     const databaseService = require('../services/databaseService');
     const DAILY_LIMIT = 5;
     
-    // Check if limit is already reached
     const currentCount = await databaseService.getTodayDesignGenerationCount(profile.id);
     if (currentCount >= DAILY_LIMIT) {
       return res.status(429).json({
@@ -715,16 +594,14 @@ router.post('/buyer-profile/increment-design-generation', async (req, res) => {
       });
     }
 
-    // Increment count
     const newCount = await databaseService.incrementDesignGenerationCount(profile.id);
-    const remaining = Math.max(0, DAILY_LIMIT - newCount);
 
     return res.status(200).json({
       success: true,
       message: 'Design generation count incremented',
       data: {
         count: newCount,
-        remaining,
+        remaining: Math.max(0, DAILY_LIMIT - newCount),
         limit: DAILY_LIMIT,
         canGenerate: newCount < DAILY_LIMIT
       }
@@ -739,20 +616,15 @@ router.post('/buyer-profile/increment-design-generation', async (req, res) => {
   }
 });
 
-/**
- * @route   PUT /api/auth/buyer-profile
- * @desc    Update buyer profile
- * @access  Private
- */
+// PUT /api/auth/buyer-profile
 router.put('/buyer-profile', [
-  body('full_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Full name is required and must be between 1 and 255 characters'),
+  body('full_name').notEmpty().isLength({ min: 1, max: 255 }).withMessage('Full name is required'),
   body('email').notEmpty().isEmail().withMessage('Please provide a valid email address'),
-  body('phone_number').optional().isMobilePhone('any').withMessage('Please provide a valid phone number'),
-  body('business_address').notEmpty().isLength({ min: 1, max: 1000 }).withMessage('Business address is required and must be between 1 and 1000 characters'),
-  body('about_business').notEmpty().isLength({ min: 1, max: 1000 }).withMessage('About business is required and must be between 1 and 1000 characters')
+  body('phone_number').optional().isMobilePhone('any'),
+  body('business_address').notEmpty().isLength({ min: 1, max: 1000 }).withMessage('Business address is required'),
+  body('about_business').notEmpty().isLength({ min: 1, max: 1000 }).withMessage('About business is required')
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -763,7 +635,6 @@ router.put('/buyer-profile', [
     }
 
     const authHeader = req.headers.authorization;
-    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -774,7 +645,6 @@ router.put('/buyer-profile', [
     const token = authHeader.substring(7);
     const decoded = authService.verifyJWT(token);
 
-    // Get profile from database
     const profile = await authService.getProfileByPhone(decoded.phoneNumber, decoded.role);
     if (!profile) {
       return res.status(404).json({
@@ -783,21 +653,15 @@ router.put('/buyer-profile', [
       });
     }
 
-    // Update buyer profile
-    const profileData = req.body;
-    const updatedProfile = await authService.updateBuyerProfile(profile.id, profileData);
+    const updatedProfile = await authService.updateBuyerProfile(profile.id, req.body);
 
     res.status(200).json({
       success: true,
       message: 'Profile updated successfully',
-      data: {
-        profile: updatedProfile
-      }
+      data: { profile: updatedProfile }
     });
-
   } catch (error) {
     console.error('Update buyer profile error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to update profile'

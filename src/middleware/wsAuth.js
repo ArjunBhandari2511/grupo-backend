@@ -1,9 +1,5 @@
 const { decodeToken } = require('./auth');
 
-/**
- * Socket.IO authentication middleware
- * Reads token from handshake auth or Authorization header and attaches user to socket
- */
 module.exports = function socketAuth(socket, next) {
   try {
     const authHeader = socket.handshake.headers.authorization;

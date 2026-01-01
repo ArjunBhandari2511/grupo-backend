@@ -4,18 +4,12 @@ const databaseService = require('../services/databaseService');
 const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 
-// Socket.io instance will be set by the server
 let io = null;
 
-// Function to set io instance from server.js
 router.setIo = (socketIo) => {
   io = socketIo;
 };
 
-/**
- * Admin authentication middleware
- * Allows hardcoded admin token for demo purposes
- */
 const authenticateAdmin = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -29,14 +23,12 @@ const authenticateAdmin = (req, res, next) => {
 
     const token = authHeader.substring(7);
     
-    // Check for hardcoded admin token (for demo/dev purposes)
     const ADMIN_TOKENS = [
       'demo_admin_token',
-      process.env.ADMIN_TOKEN // Allow env-based admin token
+      process.env.ADMIN_TOKEN
     ].filter(Boolean);
     
     if (ADMIN_TOKENS.includes(token)) {
-      // Set admin user for demo
       req.user = {
         userId: 'admin_demo',
         role: 'admin',
@@ -46,7 +38,6 @@ const authenticateAdmin = (req, res, next) => {
       return next();
     }
     
-    // Try normal JWT authentication as fallback
     try {
       const authService = require('../services/authService');
       const decoded = authService.verifyJWT(token);
@@ -61,7 +52,7 @@ const authenticateAdmin = (req, res, next) => {
         return next();
       }
     } catch {
-      // JWT verification failed, continue to error
+      // JWT verification failed
     }
     
     return res.status(403).json({
@@ -77,14 +68,9 @@ const authenticateAdmin = (req, res, next) => {
   }
 };
 
-/**
- * @route   POST /api/requirements
- * @desc    Create a new requirement
- * @access  Private (Buyer only)
- */
+// POST /api/requirements - Create requirement (Buyer only)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -92,16 +78,8 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const {
-      requirement_text,
-      quantity,
-      product_type,
-      product_link,
-      image_url,
-      notes
-    } = req.body;
+    const { requirement_text, quantity, product_type, product_link, image_url, notes } = req.body;
 
-    // Validate required fields
     if (!requirement_text || requirement_text.trim().length === 0) {
       return res.status(400).json({
         success: false,
@@ -109,7 +87,6 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create requirement data
     const requirementData = {
       buyer_id: req.user.userId,
       requirement_text: requirement_text.trim(),
@@ -120,23 +97,15 @@ router.post('/', authenticateToken, async (req, res) => {
       notes: notes ? notes.trim() : null
     };
 
-    // Create requirement in database
     const requirement = await databaseService.createRequirement(requirementData);
 
-    // Fetch buyer information to include in socket event
     const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
-    const enrichedRequirement = {
-      ...requirement,
-      buyer: buyer || null
-    };
+    const enrichedRequirement = { ...requirement, buyer: buyer || null };
 
-    // Emit socket event to all manufacturers
     if (io) {
-      // Broadcast to all users in the manufacturer role room
       io.to('role:manufacturer').emit('requirement:new', { requirement: enrichedRequirement });
     }
 
-    // Send WhatsApp notifications to all manufacturers (async, don't block response)
     (async () => {
       try {
         const manufacturers = await databaseService.getAllManufacturers();
@@ -146,7 +115,7 @@ router.post('/', authenticateToken, async (req, res) => {
           }
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (new requirement):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -165,11 +134,7 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements
- * @desc    Get requirements for the authenticated user
- * @access  Private (Buyer gets their own, Manufacturer gets all)
- */
+// GET /api/requirements
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { limit, offset, sortBy, sortOrder } = req.query;
@@ -184,10 +149,8 @@ router.get('/', authenticateToken, async (req, res) => {
     let requirements;
 
     if (req.user.role === 'buyer') {
-      // Buyers can only see their own requirements
       requirements = await databaseService.getBuyerRequirements(req.user.userId, options);
     } else if (req.user.role === 'manufacturer') {
-      // Manufacturers can see all requirements
       requirements = await databaseService.getAllRequirements(options);
     } else {
       return res.status(403).json({
@@ -211,15 +174,10 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements/buyer/statistics
- * @desc    Get requirement statistics for the authenticated buyer
- * @access  Private (Buyer only)
- * @note    This route MUST come before /:id to avoid route conflicts
- */
+// GET /api/requirements/buyer/statistics (Buyer only)
+// Note: Must come before /:id
 router.get('/buyer/statistics', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -243,17 +201,12 @@ router.get('/buyer/statistics', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements/conversation/:conversationId/negotiating
- * @desc    Get negotiating and accepted requirements for a conversation (buyer_id and manufacturer_id match)
- * @access  Private
- * @note    This route MUST come before /:id to avoid route conflicts
- */
+// GET /api/requirements/conversation/:conversationId/negotiating
+// Note: Must come before /:id
 router.get('/conversation/:conversationId/negotiating', authenticateToken, async (req, res) => {
   try {
     const { conversationId } = req.params;
     
-    // Get conversation to extract buyer_id and manufacturer_id
     const conversation = await databaseService.getConversation(conversationId);
     
     if (!conversation) {
@@ -263,7 +216,6 @@ router.get('/conversation/:conversationId/negotiating', authenticateToken, async
       });
     }
 
-    // Verify user is a participant in this conversation
     const { userId, role } = req.user;
     if (!((role === 'buyer' && conversation.buyer_id === userId) || 
           (role === 'manufacturer' && conversation.manufacturer_id === userId))) {
@@ -273,7 +225,6 @@ router.get('/conversation/:conversationId/negotiating', authenticateToken, async
       });
     }
 
-    // Get negotiating and accepted requirements for this conversation
     const requirements = await databaseService.getNegotiatingRequirementsForConversation(
       conversation.buyer_id,
       conversation.manufacturer_id
@@ -285,24 +236,19 @@ router.get('/conversation/:conversationId/negotiating', authenticateToken, async
       count: requirements.length
     });
   } catch (error) {
-    console.error('Get negotiating/accepted requirements error:', error);
+    console.error('Get negotiating requirements error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch negotiating/accepted requirements',
+      message: 'Failed to fetch negotiating requirements',
       error: error.message
     });
   }
 });
 
-/**
- * @route   GET /api/requirements/:id
- * @desc    Get a single requirement by ID
- * @access  Private
- */
+// GET /api/requirements/:id
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-
     const requirement = await databaseService.getRequirement(id);
 
     if (!requirement) {
@@ -312,7 +258,6 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Buyers can only view their own requirements
     if (req.user.role === 'buyer' && requirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -320,12 +265,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Include buyer details
     const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
-    const enrichedRequirement = {
-      ...requirement,
-      buyer: buyer || null
-    };
+    const enrichedRequirement = { ...requirement, buyer: buyer || null };
 
     return res.status(200).json({
       success: true,
@@ -341,16 +282,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   PUT /api/requirements/:id
- * @desc    Update a requirement
- * @access  Private (Buyer can update their own)
- */
+// PUT /api/requirements/:id (Buyer only)
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Get the existing requirement
     const existingRequirement = await databaseService.getRequirement(id);
 
     if (!existingRequirement) {
@@ -360,7 +295,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Only the buyer who created it can update
     if (req.user.role !== 'buyer' || existingRequirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -368,16 +302,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const {
-      requirement_text,
-      quantity,
-      product_type,
-      product_link,
-      image_url,
-      notes
-    } = req.body;
+    const { requirement_text, quantity, product_type, product_link, image_url, notes } = req.body;
 
-    // Build update data
     const updateData = {};
     if (requirement_text !== undefined) updateData.requirement_text = requirement_text.trim();
     if (quantity !== undefined) updateData.quantity = parseInt(quantity);
@@ -386,7 +312,6 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (image_url !== undefined) updateData.image_url = image_url.trim();
     if (notes !== undefined) updateData.notes = notes.trim();
 
-    // Update requirement in database
     const updatedRequirement = await databaseService.updateRequirement(id, updateData);
 
     return res.status(200).json({
@@ -404,16 +329,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   DELETE /api/requirements/:id
- * @desc    Delete a requirement
- * @access  Private (Buyer can delete their own)
- */
+// DELETE /api/requirements/:id (Buyer only)
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Get the existing requirement
     const existingRequirement = await databaseService.getRequirement(id);
 
     if (!existingRequirement) {
@@ -423,7 +342,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Only the buyer who created it can delete
     if (req.user.role !== 'buyer' || existingRequirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -431,7 +349,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete requirement from database
     await databaseService.deleteRequirement(id);
 
     return res.status(200).json({
@@ -448,18 +365,9 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// =============================================
-// REQUIREMENT RESPONSES ROUTES
-// =============================================
-
-/**
- * @route   POST /api/requirements/:id/responses
- * @desc    Create a response to a requirement
- * @access  Private (Manufacturer only)
- */
+// POST /api/requirements/:id/responses - Create response (Manufacturer only)
 router.post('/:id/responses', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a manufacturer
     if (req.user.role !== 'manufacturer') {
       return res.status(403).json({
         success: false,
@@ -468,14 +376,8 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
     }
 
     const { id: requirementId } = req.params;
-    const {
-      quoted_price,
-      price_per_unit,
-      delivery_time,
-      notes
-    } = req.body;
+    const { quoted_price, price_per_unit, delivery_time, notes } = req.body;
 
-    // Validate required fields
     if (!quoted_price || !price_per_unit || !delivery_time) {
       return res.status(400).json({
         success: false,
@@ -483,7 +385,6 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if requirement exists
     const requirement = await databaseService.getRequirement(requirementId);
     if (!requirement) {
       return res.status(404).json({
@@ -492,12 +393,7 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if manufacturer has already responded
-    const existingResponse = await databaseService.getManufacturerResponse(
-      requirementId,
-      req.user.userId
-    );
-
+    const existingResponse = await databaseService.getManufacturerResponse(requirementId, req.user.userId);
     if (existingResponse) {
       return res.status(400).json({
         success: false,
@@ -505,41 +401,29 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Create response data (fees are calculated in frontend)
     const responseData = {
       requirement_id: requirementId,
       manufacturer_id: req.user.userId,
-      quoted_price: parseFloat(quoted_price), // Store price as sent from frontend (includes fees)
-      price_per_unit: parseFloat(price_per_unit), // Store price per unit as sent from frontend
+      quoted_price: parseFloat(quoted_price),
+      price_per_unit: parseFloat(price_per_unit),
       delivery_time: delivery_time.trim(),
       notes: notes ? notes.trim() : null,
       status: 'submitted'
     };
 
-    // Create response in database
     const response = await databaseService.createRequirementResponse(responseData);
-
-    // Fetch manufacturer information to include in socket event
     const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
     
-    // Enrich response with requirement and manufacturer details
     const enrichedResponse = {
       ...response,
-      requirement: {
-        ...requirement,
-        buyer_id: requirement.buyer_id
-      },
+      requirement: { ...requirement, buyer_id: requirement.buyer_id },
       manufacturer: manufacturer || null
     };
 
-    // Emit socket event to the buyer who owns this requirement
     if (io) {
-      io.to(`user:${requirement.buyer_id}`).emit('requirement:response:new', { 
-        response: enrichedResponse 
-      });
+      io.to(`user:${requirement.buyer_id}`).emit('requirement:response:new', { response: enrichedResponse });
     }
 
-    // Send WhatsApp notification to the buyer (async, don't block response)
     (async () => {
       try {
         const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
@@ -547,7 +431,7 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
           await whatsappService.notifyNewRequirementResponse(buyer.phone_number, response, manufacturer);
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (new requirement response):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -566,15 +450,10 @@ router.post('/:id/responses', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements/responses/my-responses
- * @desc    Get all responses from the authenticated manufacturer
- * @access  Private (Manufacturer only)
- * @note    This route MUST come before /:id/responses to avoid route conflicts
- */
+// GET /api/requirements/responses/my-responses (Manufacturer only)
+// Note: Must come before /:id/responses
 router.get('/responses/my-responses', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a manufacturer
     if (req.user.role !== 'manufacturer') {
       return res.status(403).json({
         success: false,
@@ -609,16 +488,11 @@ router.get('/responses/my-responses', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements/:id/responses
- * @desc    Get all responses for a requirement
- * @access  Private
- */
+// GET /api/requirements/:id/responses
 router.get('/:id/responses', authenticateToken, async (req, res) => {
   try {
     const { id: requirementId } = req.params;
 
-    // Check if requirement exists
     const requirement = await databaseService.getRequirement(requirementId);
     if (!requirement) {
       return res.status(404).json({
@@ -627,7 +501,6 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Buyers can only view responses to their own requirements
     if (req.user.role === 'buyer' && requirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -635,7 +508,6 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get responses
     const responses = await databaseService.getRequirementResponses(requirementId);
 
     return res.status(200).json({
@@ -653,18 +525,12 @@ router.get('/:id/responses', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/requirements/responses/:responseId
- * @desc    Get a single requirement response by ID
- * @access  Private (Buyer or Manufacturer who owns the requirement/response)
- */
+// GET /api/requirements/responses/:responseId
 router.get('/responses/:responseId', authenticateToken, async (req, res) => {
   try {
     const { responseId } = req.params;
 
-    // Get the response
     const response = await databaseService.getRequirementResponseById(responseId);
-    
     if (!response) {
       return res.status(404).json({
         success: false,
@@ -672,9 +538,7 @@ router.get('/responses/:responseId', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get the requirement to verify ownership
     const requirement = await databaseService.getRequirement(response.requirement_id);
-    
     if (!requirement) {
       return res.status(404).json({
         success: false,
@@ -682,7 +546,6 @@ router.get('/responses/:responseId', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify user has permission to view this response
     if (req.user.role === 'buyer' && requirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -697,16 +560,12 @@ router.get('/responses/:responseId', authenticateToken, async (req, res) => {
       });
     }
 
-    // Enrich response with requirement and manufacturer details
     const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
     const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
 
     const enrichedResponse = {
       ...response,
-      requirement: {
-        ...requirement,
-        buyer: buyer || null
-      },
+      requirement: { ...requirement, buyer: buyer || null },
       manufacturer: manufacturer || null
     };
 
@@ -724,14 +583,9 @@ router.get('/responses/:responseId', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   PATCH /api/requirements/responses/:responseId/status
- * @desc    Update response status (accept/reject) - Buyer only
- * @access  Private (Buyer only)
- */
+// PATCH /api/requirements/responses/:responseId/status (Buyer only)
 router.patch('/responses/:responseId/status', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -742,7 +596,6 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
     const { responseId } = req.params;
     const { status } = req.body;
 
-    // Validate status
     if (!status || !['accepted', 'rejected', 'negotiating'].includes(status)) {
       return res.status(400).json({
         success: false,
@@ -750,9 +603,7 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
-    // Get the response and verify ownership
     const response = await databaseService.getRequirementResponseById(responseId);
-    
     if (!response) {
       return res.status(404).json({
         success: false,
@@ -760,9 +611,7 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
-    // Get the requirement to verify buyer ownership
     const requirement = await databaseService.getRequirement(response.requirement_id);
-    
     if (!requirement || requirement.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -770,30 +619,21 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
-    // Update status
     let updateData = { status };
     if (status === 'accepted') {
       updateData.accepted_at = new Date().toISOString();
     }
 
-    // Update response status
     const updatedResponse = await databaseService.updateRequirementResponse(responseId, updateData);
-
-    // Fetch manufacturer and buyer information to include in socket event
     const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
     const buyer = await databaseService.findBuyerProfile(requirement.buyer_id);
 
-    // Enrich response with requirement, buyer, and manufacturer details
     const enrichedResponse = {
       ...updatedResponse,
-      requirement: {
-        ...requirement,
-        buyer: buyer || null
-      },
+      requirement: { ...requirement, buyer: buyer || null },
       manufacturer: manufacturer || null
     };
 
-    // Emit socket event to the manufacturer who submitted this response
     if (io) {
       io.to(`user:${response.manufacturer_id}`).emit('requirement:response:status:updated', { 
         response: enrichedResponse,
@@ -801,14 +641,13 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
       });
     }
 
-    // Send WhatsApp notification to the manufacturer (async, don't block response)
     (async () => {
       try {
         if (manufacturer && manufacturer.phone_number) {
           await whatsappService.notifyResponseStatusUpdate(manufacturer.phone_number, status, requirement);
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (response status update):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -827,22 +666,13 @@ router.patch('/responses/:responseId/status', authenticateToken, async (req, res
   }
 });
 
-// =============================================
-// ADMIN ORDERS ROUTES
-// =============================================
-
-/**
- * @route   GET /api/requirements/admin/orders
- * @desc    Get all orders with optional status filter (Admin only)
- * @access  Private (Admin only)
- * @query   status - Optional filter: 'accepted', 'rejected', 'submitted' (pending), or omit for all
- */
+// GET /api/requirements/admin/orders (Admin only)
 router.get('/admin/orders', authenticateAdmin, async (req, res) => {
   try {
     const { status, limit, offset, sortBy, sortOrder } = req.query;
 
     const options = {
-      status: status || undefined, // Filter by status if provided
+      status: status || undefined,
       limit: limit ? parseInt(limit) : 100,
       offset: offset ? parseInt(offset) : 0,
       sortBy,

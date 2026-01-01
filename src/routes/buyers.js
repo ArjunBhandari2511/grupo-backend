@@ -3,14 +3,9 @@ const databaseService = require('../services/databaseService');
 
 const router = express.Router();
 
-/**
- * @route   GET /api/buyers
- * @desc    Get all buyers with optional filters
- * @access  Public
- */
+// GET /api/buyers
 router.get('/', async (req, res) => {
   try {
-    // Extract query parameters
     const options = {
       sortBy: req.query.sortBy || 'created_at',
       sortOrder: req.query.sortOrder || 'desc',
@@ -28,10 +23,8 @@ router.get('/', async (req, res) => {
         count: buyers.length
       }
     });
-
   } catch (error) {
     console.error('Get buyers error:', error);
-    
     res.status(400).json({
       success: false,
       message: error.message || 'Failed to retrieve buyers'
@@ -40,4 +33,3 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
-

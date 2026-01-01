@@ -4,22 +4,15 @@ const databaseService = require('../services/databaseService');
 const whatsappService = require('../services/whatsappService');
 const { authenticateToken } = require('../middleware/auth');
 
-// Socket.io instance will be set by the server
 let io = null;
 
-// Function to set io instance from server.js
 router.setIo = (socketIo) => {
   io = socketIo;
 };
 
-/**
- * @route   POST /api/ai-design-responses
- * @desc    Create a response to an AI design (manufacturer responds)
- * @access  Private (Manufacturer only)
- */
+// POST /api/ai-design-responses - Create response to AI design (Manufacturer only)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    // Ensure user is a manufacturer
     if (req.user.role !== 'manufacturer') {
       return res.status(403).json({
         success: false,
@@ -27,13 +20,8 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const {
-      ai_design_id,
-      price_per_unit,
-      quantity
-    } = req.body;
+    const { ai_design_id, price_per_unit, quantity } = req.body;
 
-    // Validate required fields
     if (!ai_design_id) {
       return res.status(400).json({
         success: false,
@@ -55,7 +43,6 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Verify AI design exists
     const aiDesign = await databaseService.getAIDesign(ai_design_id);
     if (!aiDesign) {
       return res.status(404).json({
@@ -64,7 +51,6 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if manufacturer has already responded to this AI design
     try {
       const existingResponses = await databaseService.getAIDesignResponses(ai_design_id);
       const hasExistingResponse = existingResponses.some(
@@ -78,23 +64,16 @@ router.post('/', authenticateToken, async (req, res) => {
         });
       }
     } catch (checkError) {
-      // If check fails, continue - the unique constraint will catch it anyway
-      console.warn('Could not check existing responses, proceeding with insert:', checkError.message);
+      // Continue - unique constraint will catch duplicates
     }
 
-    // Calculate price breakdown
     const pricePerUnit = parseFloat(price_per_unit);
     const qty = parseInt(quantity);
     const basePrice = pricePerUnit * qty;
-    const gst = basePrice * 0.05; // 5% GST
-    
-    // Calculate platform fee - fixed 10% of base price
-    const platformFeeRate = 0.10; // Fixed 10%
-    const platformFee = basePrice * platformFeeRate;
-    
+    const gst = basePrice * 0.05;
+    const platformFee = basePrice * 0.10;
     const quotedPrice = basePrice + gst + platformFee;
 
-    // Create response data
     const responseData = {
       ai_design_id,
       manufacturer_id: req.user.userId,
@@ -106,30 +85,19 @@ router.post('/', authenticateToken, async (req, res) => {
       status: 'submitted'
     };
 
-    // Create AI design response in database
     const response = await databaseService.createAIDesignResponse(responseData);
-
-    // Fetch manufacturer information to include in socket event
     const manufacturer = await databaseService.findManufacturerProfile(response.manufacturer_id);
     
-    // Enrich response with AI design and manufacturer details
     const enrichedResponse = {
       ...response,
-      ai_design: {
-        ...aiDesign,
-        buyer_id: aiDesign.buyer_id
-      },
+      ai_design: { ...aiDesign, buyer_id: aiDesign.buyer_id },
       manufacturer: manufacturer || null
     };
 
-    // Emit socket event to the buyer who owns this AI design
     if (io) {
-      io.to(`user:${aiDesign.buyer_id}`).emit('ai-design:response:new', { 
-        response: enrichedResponse 
-      });
+      io.to(`user:${aiDesign.buyer_id}`).emit('ai-design:response:new', { response: enrichedResponse });
     }
 
-    // Send WhatsApp notification to the buyer (async, don't block response)
     (async () => {
       try {
         const buyer = await databaseService.findBuyerProfile(aiDesign.buyer_id);
@@ -137,7 +105,7 @@ router.post('/', authenticateToken, async (req, res) => {
           await whatsappService.notifyNewAIDesignResponse(buyer.phone_number, response, manufacturer);
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (new AI design response):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -149,11 +117,10 @@ router.post('/', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Create AI design response error:', error);
     
-    // Handle unique constraint violation (manufacturer already responded)
     if (error.message && (
       error.message.includes('unique constraint') || 
       error.message.includes('duplicate key') ||
-      error.message.includes('23505') // PostgreSQL unique violation error code
+      error.message.includes('23505')
     )) {
       return res.status(409).json({
         success: false,
@@ -169,20 +136,13 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   GET /api/ai-design-responses
- * @desc    Get AI design responses
- * @access  Private
- * @note    Buyers see responses to their AI designs, Manufacturers see their own responses
- */
+// GET /api/ai-design-responses - Get AI design responses
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const { ai_design_id } = req.query;
-
     let responses;
 
     if (ai_design_id) {
-      // Get responses for a specific AI design
       const aiDesign = await databaseService.getAIDesign(ai_design_id);
       
       if (!aiDesign) {
@@ -192,7 +152,6 @@ router.get('/', authenticateToken, async (req, res) => {
         });
       }
 
-      // Buyers can only see responses to their own AI designs
       if (req.user.role === 'buyer' && aiDesign.buyer_id !== req.user.userId) {
         return res.status(403).json({
           success: false,
@@ -202,14 +161,9 @@ router.get('/', authenticateToken, async (req, res) => {
 
       responses = await databaseService.getAIDesignResponses(ai_design_id);
     } else {
-      // Get all responses based on user role
       if (req.user.role === 'buyer') {
-        // Buyers see responses to their AI designs
         responses = await databaseService.getBuyerAIDesignResponses(req.user.userId);
       } else if (req.user.role === 'manufacturer') {
-        // Manufacturers see their own responses
-        // For now, we'll need to filter by manufacturer_id
-        // This can be enhanced later if needed
         return res.status(400).json({
           success: false,
           message: 'Please specify ai_design_id to view responses'
@@ -237,17 +191,12 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-/**
- * @route   PATCH /api/ai-design-responses/:id/status
- * @desc    Update AI design response status (accept/reject)
- * @access  Private (Buyer can accept/reject responses to their designs)
- */
+// PATCH /api/ai-design-responses/:id/status - Update response status (Buyer only)
 router.patch('/:id/status', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
-    // Validate status
     if (!status || !['accepted', 'rejected'].includes(status)) {
       return res.status(400).json({
         success: false,
@@ -255,7 +204,6 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Ensure user is a buyer
     if (req.user.role !== 'buyer') {
       return res.status(403).json({
         success: false,
@@ -263,7 +211,6 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get the existing response
     const existingResponse = await databaseService.getAIDesignResponse(id);
     if (!existingResponse) {
       return res.status(404).json({
@@ -272,7 +219,6 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Get the AI design to verify ownership
     const aiDesign = await databaseService.getAIDesign(existingResponse.ai_design_id);
     if (!aiDesign) {
       return res.status(404).json({
@@ -281,7 +227,6 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Only the buyer who owns the AI design can accept/reject responses
     if (aiDesign.buyer_id !== req.user.userId) {
       return res.status(403).json({
         success: false,
@@ -289,24 +234,16 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update response status
     const updatedResponse = await databaseService.updateAIDesignResponse(id, { status });
-
-    // Fetch manufacturer and buyer information to include in socket event
     const manufacturer = await databaseService.findManufacturerProfile(existingResponse.manufacturer_id);
     const buyer = await databaseService.findBuyerProfile(aiDesign.buyer_id);
 
-    // Enrich response with AI design, buyer, and manufacturer details
     const enrichedResponse = {
       ...updatedResponse,
-      ai_design: {
-        ...aiDesign,
-        buyer: buyer || null
-      },
+      ai_design: { ...aiDesign, buyer: buyer || null },
       manufacturer: manufacturer || null
     };
 
-    // Emit socket event to the manufacturer who submitted this response
     if (io) {
       io.to(`user:${existingResponse.manufacturer_id}`).emit('ai-design:response:status:updated', { 
         response: enrichedResponse,
@@ -314,14 +251,13 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       });
     }
 
-    // Send WhatsApp notification to the manufacturer (async, don't block response)
     (async () => {
       try {
         if (manufacturer && manufacturer.phone_number) {
           await whatsappService.notifyAIDesignResponseStatusUpdate(manufacturer.phone_number, status, aiDesign);
         }
       } catch (waError) {
-        console.error('WhatsApp notification error (AI design response status update):', waError.message);
+        console.error('WhatsApp notification error:', waError.message);
       }
     })();
 
@@ -341,4 +277,3 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-
